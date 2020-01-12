@@ -9,6 +9,11 @@
  * ----------------------------------------------------------------------------
  */
 
+static int state;
+#define STATE_MENU                  0
+#define STATE_SH4_VRAM_TEST         1
+#define STATE_SH4_VRAM_TEST_RESULTS 2
+
 #define SPG_HBLANK_INT (*(unsigned volatile*)0xa05f80c8)
 #define SPG_VBLANK_INT (*(unsigned volatile*)0xa05f80cc)
 #define SPG_CONTROL    (*(unsigned volatile*)0xa05f80d0)
@@ -296,6 +301,8 @@ static int check_controller(void) {
     return 1;
 }
 
+static unsigned controller_btns_prev, controller_btns;
+
 static unsigned get_controller_buttons(void) {
     if (!check_controller())
         return ~0;
@@ -344,6 +351,20 @@ static unsigned get_controller_buttons(void) {
 
     // transfer is now complete, receive data
     return ((unsigned)condp[8]) | (((unsigned)condp[9]) << 8);
+}
+
+void update_controller(void) {
+    controller_btns_prev = controller_btns;
+    controller_btns = ~get_controller_buttons();
+}
+
+int check_btn(int btn_no) {
+    int changed_btns = controller_btns_prev ^ controller_btns;
+
+    if ((btn_no & changed_btns) && (btn_no & controller_btns))
+        return 1;
+    else
+        return 0;
 }
 
 #define N_CHAR_ROWS MAX_CHARS_Y
@@ -409,6 +430,9 @@ static char const *hexstr(unsigned val) {
     txt[8] = '\0';
     return txt;
 }
+
+#define N_FONTS 6
+static unsigned short fonts[N_FONTS][288 * 24 * 12];
 
 /*
 TRANSLATE 32 BIT AREA to 64 BIT
@@ -532,6 +556,8 @@ int test_single_addr_32(unsigned offs) {
     return 0;
 }
 
+static int test_results;
+
 static int run_tests(void) {
     // this test will overwrite the fb, so temporarily disable video
     disable_video();
@@ -548,7 +574,89 @@ static int run_tests(void) {
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
     enable_video();
 
-    return retcode;
+    test_results = retcode;
+    return STATE_SH4_VRAM_TEST_RESULTS;
+}
+
+static int disp_results(void) {
+    for (;;) {
+        void volatile *fb = get_backbuffer();
+        clear_screen(fb, make_color(0, 0, 0));
+        drawstring(fb, fonts[4], "*****************************************************", 0, 0);
+        drawstring(fb, fonts[4], "*                                                   *", 1, 0);
+        drawstring(fb, fonts[4], "*                   SH4 VRAM TEST                   *", 2, 0);
+        drawstring(fb, fonts[4], "*                   RESULT SCREEN                   *", 3, 0);
+        drawstring(fb, fonts[4], "*                                                   *", 4, 0);
+        drawstring(fb, fonts[4], "*****************************************************", 5, 0);
+
+        drawstring(fb, fonts[4], "         SH4 VRAM TEST", 7, 0);
+        if (test_results == 0)
+            drawstring(fb, fonts[1], "SUCCESS", 7, 23);
+        else
+            drawstring(fb, fonts[2], "FAILURE", 7, 23);
+
+        while (!check_vblank())
+            ;
+        swap_buffers();
+        update_controller();
+
+        if (check_btn(1 << 2)) // a button
+            return STATE_MENU;
+    }
+}
+
+static int main_menu(void) {
+    int menupos = 0;
+
+    enable_video();
+    clear_screen(get_backbuffer(), make_color(0, 0, 0));
+
+    int curs = 0;
+
+    while (!check_vblank())
+        ;
+    controller_btns_prev = ~get_controller_buttons();
+
+    for (;;) {
+        void volatile *fb = get_backbuffer();
+        clear_screen(fb, make_color(0, 0, 0));
+        drawstring(fb, fonts[4], "*****************************************************", 0, 0);
+        drawstring(fb, fonts[4], "*                                                   *", 1, 0);
+        drawstring(fb, fonts[4], "*           Dreamcast PowerVR2 Memory Test          *", 2, 0);
+        drawstring(fb, fonts[4], "*                snickerbockers 2020                *", 3, 0);
+        drawstring(fb, fonts[4], "*                                                   *", 4, 0);
+        drawstring(fb, fonts[4], "*****************************************************", 5, 0);
+
+        drawstring(fb, fonts[4], "         SH4 VRAM TEST", 7, 0);
+
+        switch (curs) {
+        default:
+            curs = 0;
+        case 0:
+            drawstring(fb, fonts[4], " ======>", 7, 0);
+        }
+
+        while (!check_vblank())
+            ;
+        swap_buffers();
+
+        update_controller();
+
+        if (check_btn(1 << 5)) {
+            // d-pad down
+            if (curs < 0)
+                curs++;
+        }
+
+        if (check_btn(1 << 4)) {
+            // d-pad up
+            if (curs > 0)
+                curs--;
+        }
+
+        if (check_btn(1 << 2)) // a button
+            return STATE_SH4_VRAM_TEST;
+    }
 }
 
 /*
@@ -566,12 +674,7 @@ int dcmain(int argc, char **argv) {
     /* static char txt_buf[N_CHAR_ROWS][N_CHAR_COLS]; */
     /* static int txt_colors[N_CHAR_ROWS][N_CHAR_COLS]; */
 
-#define N_FONTS 6
-    static unsigned short fonts[N_FONTS][288 * 24 * 12];
-
     configure_video();
-
-    int success = run_tests();
 
     create_font(fonts[0], make_color(0, 0, 0), make_color(0, 0, 0));
     create_font(fonts[1], make_color(0, 197, 0), make_color(0, 0, 0));
@@ -580,20 +683,31 @@ int dcmain(int argc, char **argv) {
     create_font(fonts[4], make_color(197, 197, 230), make_color(0, 0, 0));
     create_font(fonts[5], make_color(255, 131, 24), make_color(0, 0, 0));
 
-    enable_video();
+    state = STATE_MENU;
 
     for (;;) {
-        clear_screen(get_backbuffer(), make_color(0, 0, 0));
-        void volatile *fb = get_backbuffer();
+        switch (state) {
+        case STATE_MENU:
+            state = main_menu();
+            break;
+        case STATE_SH4_VRAM_TEST:
+            state = run_tests();
+            break;
+        case STATE_SH4_VRAM_TEST_RESULTS:
+            state = disp_results();
+            break;
+        }
+        /* clear_screen(get_backbuffer(), make_color(0, 0, 0)); */
+        /* void volatile *fb = get_backbuffer(); */
 
-        drawstring(fb, fonts[3], "HELLO", 0, 0);
+        /* drawstring(fb, fonts[3], "HELLO", 0, 0); */
 
-        if (success == 0)
-            drawstring(fb, fonts[1], "SUCCESS", 1, 0);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 1, 0);
+        /* if (success == 0) */
+        /*     drawstring(fb, fonts[1], "SUCCESS", 1, 0); */
+        /* else */
+        /*     drawstring(fb, fonts[2], "FAILURE", 1, 0); */
 
-        swap_buffers();
+        /* swap_buffers(); */
     }
 
     return 0;
