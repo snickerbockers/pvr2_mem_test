@@ -498,7 +498,7 @@ else
 
 // return all 8 banked versions of the given offset
 static void get_all_banks(unsigned out[8], unsigned offs) {
-    unsigned offs32 = offs & 0x00fffffc0;
+    unsigned offs32 = offs & 0x00ffffffc;
     unsigned offs64;
 
     if (offs32 >= PVR2_TEX_MEM_BANK_SIZE)
@@ -506,14 +506,14 @@ static void get_all_banks(unsigned out[8], unsigned offs) {
     else
         offs64 = offs32 * 2;
 
-    out[0] = offs64 | 0xa4000000;
-    out[1] = offs32 | 0xa4800000;
-    out[2] = offs32 | 0xa5000000;
-    out[3] = offs32 | 0xa5800000;
-    out[4] = offs64 | 0xa6000000;
-    out[5] = offs64 | 0xa6800000;
-    out[6] = offs32 | 0xa7000000;
-    out[7] = offs32 | 0xa7800000;
+    out[0] = (offs64 | 0xa4000000) | (offs & 3);
+    out[1] = (offs32 | 0xa4800000) | (offs & 3);
+    out[2] = (offs32 | 0xa5000000) | (offs & 3);
+    out[3] = (offs32 | 0xa5800000) | (offs & 3);
+    out[4] = (offs64 | 0xa6000000) | (offs & 3);
+    out[5] = (offs64 | 0xa6800000) | (offs & 3);
+    out[6] = (offs32 | 0xa7000000) | (offs & 3);
+    out[7] = (offs32 | 0xa7800000) | (offs & 3);
 }
 
 int test_single_addr_32(unsigned offs) {
@@ -567,23 +567,91 @@ int test_single_addr_32(unsigned offs) {
     return ret;
 }
 
-static int test_results;
+int test_single_addr_16(unsigned offs) {
+    unsigned bank;
+    unsigned addrs[8];
 
-static int run_tests(void) {
-    // this test will overwrite the fb, so temporarily disable video
-    disable_video();
+    get_all_banks(addrs, offs);
 
+    unsigned short volatile *ptrs[8];
+    for (bank = 0; bank < 8; bank++)
+        ptrs[bank] = (unsigned short volatile*)addrs[bank];
+
+    static unsigned short const testvals[8] = {
+        0xdead,
+        0xbabe,
+        0xb00b,
+        0xface,
+        0xa55a,
+        0x5aa5,
+        0xa5a5,
+        0x5a5a
+    };
+
+    int ret = 0;
+
+    for (bank = 0; bank < 8; bank++) {
+        *ptrs[bank] = testvals[bank];
+
+        unsigned check;
+        for (check = 0; check < 8; check++) {
+            if (check % 2 == 0) {
+                if (bank % 2) {
+                    /*
+                     * the write didn't go through so the value from the
+                     * previous write should still be preserved.
+                     */
+                    if (*ptrs[check] != testvals[bank & ~1])
+                        ret |= (1 << bank);
+                } else {
+                    // The normal case, we expect to read back the value that we just wrote
+                    if (*ptrs[check] != testvals[bank])
+                        ret |= (1 << bank);
+                }
+            } else {
+                // this should return all ones.
+                if (*ptrs[check] != 0xffff)
+                    ret |= (1 << bank);
+            }
+        }
+    }
+
+    return ret;
+}
+
+static int test_results_32, test_results_16;
+
+static int test_16bit_sh4_write(void) {
+    int retcode = 0;
+
+    unsigned offs = 0;
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 2)
+        retcode |= test_single_addr_16(offs);
+
+    return -retcode;
+}
+
+static int test_32bit_sh4_write(void) {
     int retcode = 0;
 
     unsigned offs;
     for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
         retcode |= test_single_addr_32(offs);
 
+    return -retcode;
+}
+
+static int run_tests(void) {
+    // this test will overwrite the fb, so temporarily disable video
+    disable_video();
+
+    test_results_32 = test_32bit_sh4_write();
+    test_results_16 = test_16bit_sh4_write();
+
     clear_screen(get_backbuffer(), make_color(0, 0, 0));
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
     enable_video();
 
-    test_results = -retcode;
     return STATE_SH4_VRAM_TEST_RESULTS;
 }
 
@@ -598,18 +666,36 @@ static int disp_results(void) {
         drawstring(fb, fonts[4], "*                                                   *", 4, 0);
         drawstring(fb, fonts[4], "*****************************************************", 5, 0);
 
-        drawstring(fb, fonts[4], "         SH4 VRAM TEST", 7, 0);
-        if (test_results == 0) {
-            drawstring(fb, fonts[1], "SUCCESS", 7, 23);
+        drawstring(fb, fonts[4], "     SH4 VRAM 32-BIT", 7, 0);
+        if (test_results_32 == 0) {
+            drawstring(fb, fonts[1], "SUCCESS", 7, 21);
         } else {
-            drawstring(fb, fonts[2], "FAILURE BANKS", 7, 23);
-            int bad_banks = -test_results;
+            drawstring(fb, fonts[2], "FAILURE BANKS", 7, 21);
+            int bad_banks = -test_results_32;
             int log;
-            int col = 37;
+            int col = 35;
             for (log = 0; log < 8; log++) {
                 if (bad_banks & (1 << log)) {
                     /* draw_tring(fb, fonts[2], " ", 7, 36); */
                     drawstring(fb, fonts[2], hexstr_no_leading_0(log), 7, col);
+                    /* drawstring(fb, fonts[2], ",", 7, col + 1); */
+                    col += 2;
+                }
+            }
+        }
+
+        drawstring(fb, fonts[4], "     SH4 VRAM 16-BIT", 8, 0);
+        if (test_results_16 == 0) {
+            drawstring(fb, fonts[1], "SUCCESS", 8, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE BANKS", 8, 21);
+            int bad_banks = -test_results_16;
+            int log;
+            int col = 35;
+            for (log = 0; log < 8; log++) {
+                if (bad_banks & (1 << log)) {
+                    /* draw_tring(fb, fonts[2], " ", 7, 36); */
+                    drawstring(fb, fonts[2], hexstr_no_leading_0(log), 8, col);
                     /* drawstring(fb, fonts[2], ",", 7, col + 1); */
                     col += 2;
                 }
