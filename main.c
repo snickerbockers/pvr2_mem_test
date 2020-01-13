@@ -431,6 +431,15 @@ static char const *hexstr(unsigned val) {
     return txt;
 }
 
+static char const *hexstr_no_leading_0(unsigned val) {
+    char const *retstr = hexstr(val);
+    while (*retstr == '0')
+        retstr++;
+    if (!*retstr)
+        retstr--;
+    return retstr;
+}
+
 #define N_FONTS 6
 static unsigned short fonts[N_FONTS][288 * 24 * 12];
 
@@ -527,6 +536,8 @@ int test_single_addr_32(unsigned offs) {
         0x5555aaaa
     };
 
+    int ret = 0;
+
     for (bank = 0; bank < 8; bank++) {
         *ptrs[bank] = testvals[bank];
 
@@ -539,21 +550,21 @@ int test_single_addr_32(unsigned offs) {
                      * previous write should still be preserved.
                      */
                     if (*ptrs[check] != testvals[bank & ~1])
-                        return -1;
+                        ret |= (1 << bank);
                 } else {
                     // The normal case, we expect to read back the value that we just wrote
                     if (*ptrs[check] != testvals[bank])
-                        return -1;
+                        ret |= (1 << bank);
                 }
             } else {
                 // this should return all ones.
                 if (*ptrs[check] != 0xffffffff)
-                    return -1;
+                    ret |= (1 << bank);
             }
         }
     }
 
-    return 0;
+    return ret;
 }
 
 static int test_results;
@@ -565,16 +576,14 @@ static int run_tests(void) {
     int retcode = 0;
 
     unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4) {
-        if (test_single_addr_32(offs) < 0)
-            retcode = -1;
-    }
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+        retcode |= test_single_addr_32(offs);
 
     clear_screen(get_backbuffer(), make_color(0, 0, 0));
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
     enable_video();
 
-    test_results = retcode;
+    test_results = -retcode;
     return STATE_SH4_VRAM_TEST_RESULTS;
 }
 
@@ -590,10 +599,22 @@ static int disp_results(void) {
         drawstring(fb, fonts[4], "*****************************************************", 5, 0);
 
         drawstring(fb, fonts[4], "         SH4 VRAM TEST", 7, 0);
-        if (test_results == 0)
+        if (test_results == 0) {
             drawstring(fb, fonts[1], "SUCCESS", 7, 23);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 7, 23);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE BANKS", 7, 23);
+            int bad_banks = -test_results;
+            int log;
+            int col = 37;
+            for (log = 0; log < 8; log++) {
+                if (bad_banks & (1 << log)) {
+                    /* draw_tring(fb, fonts[2], " ", 7, 36); */
+                    drawstring(fb, fonts[2], hexstr_no_leading_0(log), 7, col);
+                    /* drawstring(fb, fonts[2], ",", 7, col + 1); */
+                    col += 2;
+                }
+            }
+        }
 
         while (!check_vblank())
             ;
