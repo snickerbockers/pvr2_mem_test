@@ -619,7 +619,62 @@ int test_single_addr_16(unsigned offs) {
     return ret;
 }
 
-static int test_results_32, test_results_16;
+/*
+ * test four sequential one-byte writes.  The kicker here is that one-byte
+ * writes never work so we don't expect the value to change.
+ */
+int test_four_addrs_8(unsigned offs) {
+    unsigned bank;
+    unsigned addrs[8];
+
+    get_all_banks(addrs, offs);
+
+    char volatile *ptrs[8];
+    for (bank = 0; bank < 8; bank++)
+        ptrs[bank] = (char volatile*)addrs[bank];
+
+    static unsigned short const testvals[8] = {
+        0xde,
+        0xba,
+        0xb0,
+        0xfa,
+        0xa5,
+        0x5a,
+        0xad,
+        0x0b
+    };
+
+    int ret = 0;
+
+    unsigned mod[4] = { offs % 256, (offs + 1) % 256, (offs + 2) % 256, (offs + 3) % 256 };
+    unsigned actual_write_val = mod[0] | (mod[1] << 8) | (mod[2] << 16) | (mod[3] << 24);
+
+    for (bank = 0; bank < 8; bank++) {
+        *(unsigned volatile*)(ptrs[bank]) = actual_write_val;
+
+        unsigned byte_no;
+        for (byte_no = 0; byte_no < 4; byte_no++) {
+
+            ptrs[bank][byte_no] = testvals[bank];
+
+            unsigned check;
+            for (check = 0; check < 8; check++) {
+                if (check % 2 == 0) {
+                    if (*ptrs[check] != mod[byte_no])
+                        ret |= (1 << bank);
+                } else {
+                    // this should return all ones.
+                    if (*ptrs[check] != 0xffff)
+                        ret |= (1 << bank);
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+static int test_results_32, test_results_16, test_results_8;
 
 static int test_16bit_sh4_write(void) {
     int retcode = 0;
@@ -641,12 +696,23 @@ static int test_32bit_sh4_write(void) {
     return -retcode;
 }
 
+static int test_8bit_sh4_write(void) {
+    int retcode = 0;
+
+    unsigned offs;
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+        retcode |= test_four_addrs_8(offs);
+
+    return -retcode;
+}
+
 static int run_tests(void) {
     // this test will overwrite the fb, so temporarily disable video
     disable_video();
 
     test_results_32 = test_32bit_sh4_write();
     test_results_16 = test_16bit_sh4_write();
+    test_results_8  = test_8bit_sh4_write();
 
     clear_screen(get_backbuffer(), make_color(0, 0, 0));
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
@@ -696,6 +762,24 @@ static int disp_results(void) {
                 if (bad_banks & (1 << log)) {
                     /* draw_tring(fb, fonts[2], " ", 7, 36); */
                     drawstring(fb, fonts[2], hexstr_no_leading_0(log), 8, col);
+                    /* drawstring(fb, fonts[2], ",", 7, col + 1); */
+                    col += 2;
+                }
+            }
+        }
+
+        drawstring(fb, fonts[4], "     SH4 VRAM 8-BIT", 9, 0);
+        if (test_results_16 == 0) {
+            drawstring(fb, fonts[1], "SUCCESS", 9, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE BANKS", 9, 21);
+            int bad_banks = -test_results_8;
+            int log;
+            int col = 35;
+            for (log = 0; log < 8; log++) {
+                if (bad_banks & (1 << log)) {
+                    /* draw_tring(fb, fonts[2], " ", 7, 36); */
+                    drawstring(fb, fonts[2], hexstr_no_leading_0(log), 9, col);
                     /* drawstring(fb, fonts[2], ",", 7, col + 1); */
                     col += 2;
                 }
