@@ -664,7 +664,7 @@ int test_four_addrs_8(unsigned offs) {
                         ret |= (1 << bank);
                 } else {
                     // this should return all ones.
-                    if (ptrs[check][byte_no] != 0xffff)
+                    if (ptrs[check][byte_no] != 0xff)
                         ret |= (1 << bank);
                 }
             }
