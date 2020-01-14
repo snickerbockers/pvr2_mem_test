@@ -660,11 +660,11 @@ int test_four_addrs_8(unsigned offs) {
             unsigned check;
             for (check = 0; check < 8; check++) {
                 if (check % 2 == 0) {
-                    if (*ptrs[check] != mod[byte_no])
+                    if (ptrs[check][byte_no] != mod[byte_no])
                         ret |= (1 << bank);
                 } else {
                     // this should return all ones.
-                    if (*ptrs[check] != 0xffff)
+                    if (ptrs[check][byte_no] != 0xffff)
                         ret |= (1 << bank);
                 }
             }
