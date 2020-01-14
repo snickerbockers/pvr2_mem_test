@@ -538,31 +538,27 @@ int test_single_addr_32(unsigned offs) {
 
     int ret = 0;
 
-    for (bank = 0; bank < 8; bank++) {
-        *ptrs[bank] = testvals[bank];
-
-        unsigned check;
-        for (check = 0; check < 8; check++) {
-            if (check % 2 == 0) {
-                if (bank % 2) {
-                    /*
-                     * the write didn't go through so the value from the
-                     * previous write should still be preserved.
-                     */
-                    if (*ptrs[check] != testvals[bank & ~1])
-                        ret |= (1 << bank);
-                } else {
-                    // The normal case, we expect to read back the value that we just wrote
-                    if (*ptrs[check] != testvals[bank])
-                        ret |= (1 << bank);
-                }
-            } else {
-                // this should return all ones.
-                if (*ptrs[check] != 0xffffffff)
-                    ret |= (1 << bank);
-            }
-        }
+#define CHECK_BANK_32BIT(bank_no)               \
+    *ptrs[bank_no] = testvals[bank_no];         \
+    if (*ptrs[0] != testvals[bank_no & ~1] ||   \
+        *ptrs[1] != 0xffffffff ||               \
+        *ptrs[2] != testvals[bank_no & ~1] ||   \
+        *ptrs[3] != 0xffffffff ||               \
+        *ptrs[4] != testvals[bank_no & ~1] ||   \
+        *ptrs[5] != 0xffffffff ||               \
+        *ptrs[6] != testvals[bank_no & ~1] ||   \
+        *ptrs[7] != 0xffffffff) {               \
+        ret |= (1 << bank_no);                  \
     }
+
+    CHECK_BANK_32BIT(0)
+    CHECK_BANK_32BIT(1)
+    CHECK_BANK_32BIT(2)
+    CHECK_BANK_32BIT(3)
+    CHECK_BANK_32BIT(4)
+    CHECK_BANK_32BIT(5)
+    CHECK_BANK_32BIT(6)
+    CHECK_BANK_32BIT(7)
 
     return ret;
 }
@@ -590,31 +586,27 @@ int test_single_addr_16(unsigned offs) {
 
     int ret = 0;
 
-    for (bank = 0; bank < 8; bank++) {
-        *ptrs[bank] = testvals[bank];
-
-        unsigned check;
-        for (check = 0; check < 8; check++) {
-            if (check % 2 == 0) {
-                if (bank % 2) {
-                    /*
-                     * the write didn't go through so the value from the
-                     * previous write should still be preserved.
-                     */
-                    if (*ptrs[check] != testvals[bank & ~1])
-                        ret |= (1 << bank);
-                } else {
-                    // The normal case, we expect to read back the value that we just wrote
-                    if (*ptrs[check] != testvals[bank])
-                        ret |= (1 << bank);
-                }
-            } else {
-                // this should return all ones.
-                if (*ptrs[check] != 0xffff)
-                    ret |= (1 << bank);
-            }
-        }
+#define CHECK_BANK_16BIT(bank_no)               \
+    *ptrs[bank_no] = testvals[bank_no];         \
+    if (*ptrs[0] != testvals[bank_no & ~1] ||   \
+        *ptrs[1] != 0xffff ||                   \
+        *ptrs[2] != testvals[bank_no & ~1] ||   \
+        *ptrs[3] != 0xffff ||                   \
+        *ptrs[4] != testvals[bank_no & ~1] ||   \
+        *ptrs[5] != 0xffff ||                   \
+        *ptrs[6] != testvals[bank_no & ~1] ||   \
+        *ptrs[7] != 0xffff) {                   \
+        ret |= (1 << bank_no);                  \
     }
+
+    CHECK_BANK_16BIT(0)
+    CHECK_BANK_16BIT(1)
+    CHECK_BANK_16BIT(2)
+    CHECK_BANK_16BIT(3)
+    CHECK_BANK_16BIT(4)
+    CHECK_BANK_16BIT(5)
+    CHECK_BANK_16BIT(6)
+    CHECK_BANK_16BIT(7)
 
     return ret;
 }
@@ -649,27 +641,34 @@ int test_four_addrs_8(unsigned offs) {
     unsigned mod[4] = { offs % 256, (offs + 1) % 256, (offs + 2) % 256, (offs + 3) % 256 };
     unsigned actual_write_val = mod[0] | (mod[1] << 8) | (mod[2] << 16) | (mod[3] << 24);
 
-    for (bank = 0; bank < 8; bank++) {
-        *(unsigned volatile*)(ptrs[bank]) = actual_write_val;
-
-        unsigned byte_no;
-        for (byte_no = 0; byte_no < 4; byte_no++) {
-
-            ptrs[bank][byte_no] = testvals[bank];
-
-            unsigned check;
-            for (check = 0; check < 8; check++) {
-                if (check % 2 == 0) {
-                    if (ptrs[check][byte_no] != mod[byte_no])
-                        ret |= (1 << bank);
-                } else {
-                    // this should return all ones.
-                    if (ptrs[check][byte_no] != 0xff)
-                        ret |= (1 << bank);
-                }
-            }
-        }
+#define CHECK_VAL_8BIT(byte_no, bank_no)                   \
+    ptrs[bank_no][byte_no] = testvals[bank_no];            \
+    if (ptrs[0][byte_no] != mod[byte_no] ||                \
+        ptrs[1][byte_no] != 0xff ||                        \
+        ptrs[2][byte_no] != mod[byte_no] ||                \
+        ptrs[3][byte_no] != 0xff ||                        \
+        ptrs[4][byte_no] != mod[byte_no] ||                \
+        ptrs[5][byte_no] != 0xff ||                        \
+        ptrs[6][byte_no] != mod[byte_no] ||                \
+        ptrs[7][byte_no] != 0xff) {                        \
+        ret |= (1 << bank_no);                             \
     }
+
+#define CHECK_BANK_8BIT(bank_no)                                \
+    *(unsigned volatile*)(ptrs[bank_no]) = actual_write_val;    \
+    CHECK_VAL_8BIT(0, bank_no)                                  \
+    CHECK_VAL_8BIT(1, bank_no)                                  \
+    CHECK_VAL_8BIT(2, bank_no)                                  \
+    CHECK_VAL_8BIT(3, bank_no)
+
+    CHECK_BANK_8BIT(0)
+    CHECK_BANK_8BIT(1)
+    CHECK_BANK_8BIT(2)
+    CHECK_BANK_8BIT(3)
+    CHECK_BANK_8BIT(4)
+    CHECK_BANK_8BIT(5)
+    CHECK_BANK_8BIT(6)
+    CHECK_BANK_8BIT(7)
 
     return ret;
 }
