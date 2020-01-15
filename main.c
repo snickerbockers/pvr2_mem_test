@@ -621,11 +621,11 @@ int test_four_addrs_8(unsigned offs) {
 
     get_all_banks(addrs, offs);
 
-    char volatile *ptrs[8];
+    unsigned char volatile *ptrs[8];
     for (bank = 0; bank < 8; bank++)
-        ptrs[bank] = (char volatile*)addrs[bank];
+        ptrs[bank] = (unsigned char volatile*)addrs[bank];
 
-    static unsigned short const testvals[8] = {
+    static unsigned char const testvals[8] = {
         0xde,
         0xba,
         0xb0,
@@ -638,28 +638,18 @@ int test_four_addrs_8(unsigned offs) {
 
     int ret = 0;
 
-    unsigned mod[4] = { offs % 256, (offs + 1) % 256, (offs + 2) % 256, (offs + 3) % 256 };
-    unsigned actual_write_val = mod[0] | (mod[1] << 8) | (mod[2] << 16) | (mod[3] << 24);
-
-#define CHECK_VAL_8BIT(byte_no, bank_no)                   \
-    ptrs[bank_no][byte_no] = testvals[bank_no];            \
-    if (ptrs[0][byte_no] != mod[byte_no] ||                \
-        ptrs[1][byte_no] != 0xff ||                        \
-        ptrs[2][byte_no] != mod[byte_no] ||                \
-        ptrs[3][byte_no] != 0xff ||                        \
-        ptrs[4][byte_no] != mod[byte_no] ||                \
-        ptrs[5][byte_no] != 0xff ||                        \
-        ptrs[6][byte_no] != mod[byte_no] ||                \
-        ptrs[7][byte_no] != 0xff) {                        \
-        ret |= (1 << bank_no);                             \
+#define CHECK_BANK_8BIT(bank_no)                        \
+    *ptrs[bank_no] = testvals[bank_no];                 \
+    if (*ptrs[0] != testvals[bank_no & ~1] ||           \
+        *ptrs[1] != 0xff ||                             \
+        *ptrs[2] != testvals[bank_no & ~1] ||           \
+        *ptrs[3] != 0xff ||                             \
+        *ptrs[4] != testvals[bank_no & ~1] ||           \
+        *ptrs[5] != 0xff ||                             \
+        *ptrs[6] != testvals[bank_no & ~1] ||           \
+        *ptrs[7] != 0xff) {                             \
+        ret |= (1 << bank_no);                          \
     }
-
-#define CHECK_BANK_8BIT(bank_no)                                \
-    *(unsigned volatile*)(ptrs[bank_no]) = actual_write_val;    \
-    CHECK_VAL_8BIT(0, bank_no)                                  \
-    CHECK_VAL_8BIT(1, bank_no)                                  \
-    CHECK_VAL_8BIT(2, bank_no)                                  \
-    CHECK_VAL_8BIT(3, bank_no)
 
     CHECK_BANK_8BIT(0)
     CHECK_BANK_8BIT(1)
@@ -699,7 +689,7 @@ static int test_8bit_sh4_write(void) {
     int retcode = 0;
 
     unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs++)
         retcode |= test_four_addrs_8(offs);
 
     return -retcode;
