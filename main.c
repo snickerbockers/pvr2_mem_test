@@ -732,58 +732,22 @@ static int disp_results(void) {
         drawstring(fb, fonts[4], "*****************************************************", 5, 0);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 32-BIT", 7, 0);
-        if (test_results_32 == 0) {
+        if (test_results_32 == 0)
             drawstring(fb, fonts[1], "SUCCESS", 7, 21);
-        } else {
-            drawstring(fb, fonts[2], "FAILURE BANKS", 7, 21);
-            int bad_banks = -test_results_32;
-            int log;
-            int col = 35;
-            for (log = 0; log < 8; log++) {
-                if (bad_banks & (1 << log)) {
-                    /* draw_tring(fb, fonts[2], " ", 7, 36); */
-                    drawstring(fb, fonts[2], hexstr_no_leading_0(log), 7, col);
-                    /* drawstring(fb, fonts[2], ",", 7, col + 1); */
-                    col += 2;
-                }
-            }
-        }
+        else
+            drawstring(fb, fonts[2], "FAILURE", 7, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 16-BIT", 8, 0);
-        if (test_results_16 == 0) {
+        if (test_results_16 == 0)
             drawstring(fb, fonts[1], "SUCCESS", 8, 21);
-        } else {
-            drawstring(fb, fonts[2], "FAILURE BANKS", 8, 21);
-            int bad_banks = -test_results_16;
-            int log;
-            int col = 35;
-            for (log = 0; log < 8; log++) {
-                if (bad_banks & (1 << log)) {
-                    /* draw_tring(fb, fonts[2], " ", 7, 36); */
-                    drawstring(fb, fonts[2], hexstr_no_leading_0(log), 8, col);
-                    /* drawstring(fb, fonts[2], ",", 7, col + 1); */
-                    col += 2;
-                }
-            }
-        }
+        else
+            drawstring(fb, fonts[2], "FAILURE", 8, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 8-BIT", 9, 0);
-        if (test_results_16 == 0) {
+        if (test_results_16 == 0)
             drawstring(fb, fonts[1], "SUCCESS", 9, 21);
-        } else {
-            drawstring(fb, fonts[2], "FAILURE BANKS", 9, 21);
-            int bad_banks = -test_results_8;
-            int log;
-            int col = 35;
-            for (log = 0; log < 8; log++) {
-                if (bad_banks & (1 << log)) {
-                    /* draw_tring(fb, fonts[2], " ", 7, 36); */
-                    drawstring(fb, fonts[2], hexstr_no_leading_0(log), 9, col);
-                    /* drawstring(fb, fonts[2], ",", 7, col + 1); */
-                    col += 2;
-                }
-            }
-        }
+        else
+            drawstring(fb, fonts[2], "FAILURE", 9, 21);
 
         while (!check_vblank())
             ;
