@@ -744,7 +744,7 @@ static int disp_results(void) {
             drawstring(fb, fonts[2], "FAILURE", 8, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 8-BIT", 9, 0);
-        if (test_results_16 == 0)
+        if (test_results_8 == 0)
             drawstring(fb, fonts[1], "SUCCESS", 9, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 9, 21);
