@@ -23,7 +23,7 @@ init.o: init.s
 	$(AS) -little -o init.o init.s
 
 pvr2_mem_test.elf: init.o main.o
-	$(CC) -Wl,-e_start,-Ttext,0x8c010000 init.o main.o -o pvr2_mem_test.elf -nostartfiles -nostdlib -lgcc
+	$(CC) -Wl,-e_start,-Ttext,0x8c010000 init.o main.o -o pvr2_mem_test.elf -nostartfiles -nostdlib -lgcc -m4
 
 pvr2_mem_test.bin: pvr2_mem_test.elf
 	$(OBJCOPY) -O binary -j .text -j .data -j .bss -j .rodata  --set-section-flags .bss=alloc,load,contents pvr2_mem_test.elf pvr2_mem_test.bin

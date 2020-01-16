@@ -516,6 +516,153 @@ static void get_all_banks(unsigned out[8], unsigned offs) {
     out[7] = (offs32 | 0xa7800000) | (offs & 3);
 }
 
+int test_single_addr_float(unsigned offs) {
+    unsigned addrs[8];
+
+    get_all_banks(addrs, offs);
+
+    static unsigned const testvals[8] = {
+        0xdeadbeef,
+        0xdeadbabe,
+        0xb16b00b5,
+        0xfeedface,
+        0xdeadc0de,
+        0xaaaa5555,
+        0x5555aaaa
+    };
+
+    int ret = 0;
+
+#define CHECK_BANK_FLOAT(bank_no)                                       \
+    __asm__ __volatile__ (                                              \
+                          /* fix up fpscr */                            \
+                          "sts fpscr, r1\n"                             \
+                          "mov #3, r2\n"                                \
+                          "shll8 r2\n"                                  \
+                          "shll8 r2\n"                                  \
+                          "shll2 r2\n"                                  \
+                          "shll r2\n"                                   \
+                          "not r2, r2\n"                                \
+                          "and r1, r2\n"                                \
+                          "lds r2, fpscr\n"                             \
+                                                                        \
+                          /* r0 = bank_no * sizeof(float) */            \
+                          "mov #" #bank_no ", r0\n"                     \
+                          "shll2 r0\n"                                  \
+                                                                        \
+                          /* write testvals[bank_no] to ptrs[bank_no] */ \
+                          "mov.l @(r0, %[ptrs]), r5\n"                  \
+                          "fmov.s @(r0, %[testvals]), fr0\n"            \
+                          "fmov.s fr0, @r5\n"                           \
+                                                                        \
+                          /* clear bit 0 of bank_no */                  \
+                          "mov #" #bank_no ", r0\n"                     \
+                          "and #0xfe, r0\n"                             \
+                          "shll2 r0\n"                                  \
+                                                                        \
+                          /* load testvals[bank_no & ~1] */             \
+                          "mov.l @(r0, %[testvals]), r3\n"              \
+                                                                        \
+                          "xor r0, r0\n"                                \
+                          "mov #0xff, r4\n"                             \
+                                                                        \
+                          /* if (*ptrs[0] != testvals[bank_no & ~1]) */ \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r3\n"                             \
+                          "bf/s on_fail_"#bank_no"\n"                   \
+                          "add #4, r0\n"                                \
+                                                                        \
+                          /* if (*ptrs[1] != 0xffffffff) */             \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r4\n"                             \
+                          "bf/s on_fail_"#bank_no"\n"                   \
+                          "add #4, r0\n"                                \
+                                                                        \
+                          /* if (*ptrs[2] != testvals[bank_no & ~1]) */ \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r3\n"                             \
+                          "bf/s on_fail_"#bank_no"\n"                   \
+                          "add #4, r0\n"                                \
+                                                                        \
+                          /* if (*ptrs[3] != 0xffffffff) */             \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r4\n"                             \
+                          "bf/s on_fail_"#bank_no"\n"                   \
+                          "add #4, r0\n"                                \
+                                                                        \
+                          /* if (*ptrs[4] != testvals[bank_no & ~1]) */ \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r3\n"                             \
+                          "bf/s on_fail_"#bank_no"\n"                   \
+                          "add #4, r0\n"                                \
+                                                                        \
+                          /* if (*ptrs[5] != 0xffffffff) */             \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r4\n"                             \
+                          "bf/s on_fail_"#bank_no"\n"                   \
+                          "add #4, r0\n"                                \
+                                                                        \
+                          /* if (*ptrs[6] != testvals[bank_no & ~1]) */ \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r3\n"                             \
+                          "bf/s on_fail_"#bank_no"\n"\
+                          "add #4, r0\n"                                \
+                                                                        \
+                          /* if (*ptrs[7] != 0xffffffff) */             \
+                          "mov.l @(r0, %[ptrs]), r2\n"                  \
+                          "fmov.s @r2, fr0\n"                           \
+                          "flds fr0, fpul\n"                            \
+                          "sts fpul, r2\n"                              \
+                          "cmp/eq r2, r4\n"                             \
+                          "bf on_fail_"#bank_no"\n"                     \
+                                                                        \
+                          "bra done_"#bank_no"\n"                       \
+                          "nop\n"                                       \
+                                                                        \
+                          "on_fail_"#bank_no":\n"                       \
+                          "mov #1, %[ret]\n"                            \
+                                                                        \
+                          "done_"#bank_no":\n"                          \
+                          /* restore fpscr */                           \
+                          "lds r1, fpscr\n"                             \
+                                                                        \
+                          : [ret] "+r" (ret)                            \
+                          : [testvals] "r" (testvals), [ptrs] "r"(addrs) \
+                          : "r0", "r1", "r2", "r3", "r4", "r5", "fr0", "fpul");
+
+    CHECK_BANK_FLOAT(0)
+    CHECK_BANK_FLOAT(1)
+    CHECK_BANK_FLOAT(2)
+    CHECK_BANK_FLOAT(3)
+    CHECK_BANK_FLOAT(4)
+    CHECK_BANK_FLOAT(5)
+    CHECK_BANK_FLOAT(6)
+    CHECK_BANK_FLOAT(7)
+
+    return ret;
+}
+
 int test_single_addr_32(unsigned offs) {
     unsigned bank;
     unsigned addrs[8];
@@ -663,7 +810,7 @@ int test_four_addrs_8(unsigned offs) {
     return ret;
 }
 
-static int test_results_32, test_results_16, test_results_8;
+static int test_results_32, test_results_16, test_results_8, test_results_float;
 
 static int test_16bit_sh4_write(void) {
     int retcode = 0;
@@ -695,6 +842,16 @@ static int test_8bit_sh4_write(void) {
     return -retcode;
 }
 
+static int test_float_sh4_write(void) {
+    int retcode = 0;
+
+    unsigned offs;
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+        retcode |= test_single_addr_float(offs);
+
+    return -retcode;
+}
+
 static int run_tests(void) {
     // this test will overwrite the fb, so temporarily disable video
     disable_video();
@@ -702,6 +859,7 @@ static int run_tests(void) {
     test_results_32 = test_32bit_sh4_write();
     test_results_16 = test_16bit_sh4_write();
     test_results_8  = test_8bit_sh4_write();
+    test_results_float = test_float_sh4_write();
 
     clear_screen(get_backbuffer(), make_color(0, 0, 0));
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
@@ -738,6 +896,12 @@ static int disp_results(void) {
             drawstring(fb, fonts[1], "SUCCESS", 9, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 9, 21);
+
+        drawstring(fb, fonts[4], "     SH4 VRAM FLOAT", 10, 0);
+        if (test_results_float == 0)
+            drawstring(fb, fonts[1], "SUCCESS", 10, 21);
+        else
+            drawstring(fb, fonts[2], "FAILURE", 10, 21);
 
         while (!check_vblank())
             ;
