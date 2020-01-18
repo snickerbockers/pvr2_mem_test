@@ -48,6 +48,8 @@ static int state;
 
 void *get_romfont_pointer(void);
 
+int test_single_addr_double(unsigned offs);
+
 static unsigned get_controller_buttons(void);
 static int check_controller(void);
 
@@ -497,8 +499,8 @@ else
  */
 
 // return all 8 banked versions of the given offset
-static void get_all_banks(unsigned out[8], unsigned offs) {
-    unsigned offs32 = offs & 0x00ffffffc;
+void get_all_banks_from32(unsigned out[8], unsigned offs) {
+    unsigned offs32 = offs & 0x007ffffc;
     unsigned offs64;
 
     if (offs32 >= PVR2_TEX_MEM_BANK_SIZE)
@@ -507,7 +509,26 @@ static void get_all_banks(unsigned out[8], unsigned offs) {
         offs64 = offs32 * 2;
 
     out[0] = (offs64 | 0xa4000000) | (offs & 3);
-    out[1] = (offs32 | 0xa4800000) | (offs & 3);
+    out[1] = (offs64 | 0xa4800000) | (offs & 3);
+    out[2] = (offs32 | 0xa5000000) | (offs & 3);
+    out[3] = (offs32 | 0xa5800000) | (offs & 3);
+    out[4] = (offs64 | 0xa6000000) | (offs & 3);
+    out[5] = (offs64 | 0xa6800000) | (offs & 3);
+    out[6] = (offs32 | 0xa7000000) | (offs & 3);
+    out[7] = (offs32 | 0xa7800000) | (offs & 3);
+}
+
+void get_all_banks_from64(unsigned out[8], unsigned offs) {
+    unsigned offs64 = offs & 0x007ffffc;
+    unsigned offs32;
+
+    if (offs64 % 8)
+        offs32 = ((offs64 - 4) / 2) + PVR2_TEX_MEM_BANK_SIZE;
+    else
+        offs32 = offs64 / 2;
+
+    out[0] = (offs64 | 0xa4000000) | (offs & 3);
+    out[1] = (offs64 | 0xa4800000) | (offs & 3);
     out[2] = (offs32 | 0xa5000000) | (offs & 3);
     out[3] = (offs32 | 0xa5800000) | (offs & 3);
     out[4] = (offs64 | 0xa6000000) | (offs & 3);
@@ -519,7 +540,7 @@ static void get_all_banks(unsigned out[8], unsigned offs) {
 int test_single_addr_float(unsigned offs) {
     unsigned addrs[8];
 
-    get_all_banks(addrs, offs);
+    get_all_banks_from32(addrs, offs);
 
     static unsigned const testvals[8] = {
         0xdeadbeef,
@@ -649,16 +670,16 @@ int test_single_addr_float(unsigned offs) {
                                                                         \
                           : [ret] "+r" (ret)                            \
                           : [testvals] "r" (testvals), [ptrs] "r"(addrs) \
-                          : "r0", "r1", "r2", "r3", "r4", "r5", "fr0", "fpul");
+                          : "r0", "r1", "r2", "r3", "r4", "r5", "fr0", "fpul")
 
-    CHECK_BANK_FLOAT(0)
-    CHECK_BANK_FLOAT(1)
-    CHECK_BANK_FLOAT(2)
-    CHECK_BANK_FLOAT(3)
-    CHECK_BANK_FLOAT(4)
-    CHECK_BANK_FLOAT(5)
-    CHECK_BANK_FLOAT(6)
-    CHECK_BANK_FLOAT(7)
+    CHECK_BANK_FLOAT(0);
+    CHECK_BANK_FLOAT(1);
+    CHECK_BANK_FLOAT(2);
+    CHECK_BANK_FLOAT(3);
+    CHECK_BANK_FLOAT(4);
+    CHECK_BANK_FLOAT(5);
+    CHECK_BANK_FLOAT(6);
+    CHECK_BANK_FLOAT(7);
 
     return ret;
 }
@@ -667,7 +688,7 @@ int test_single_addr_32(unsigned offs) {
     unsigned bank;
     unsigned addrs[8];
 
-    get_all_banks(addrs, offs);
+    get_all_banks_from32(addrs, offs);
 
     unsigned volatile *ptrs[8];
     for (bank = 0; bank < 8; bank++)
@@ -714,7 +735,7 @@ int test_single_addr_16(unsigned offs) {
     unsigned bank;
     unsigned addrs[8];
 
-    get_all_banks(addrs, offs);
+    get_all_banks_from32(addrs, offs);
 
     unsigned short volatile *ptrs[8];
     for (bank = 0; bank < 8; bank++)
@@ -766,7 +787,7 @@ int test_four_addrs_8(unsigned offs) {
     unsigned bank;
     unsigned addrs[8];
 
-    get_all_banks(addrs, offs);
+    get_all_banks_from32(addrs, offs);
 
     unsigned char volatile *ptrs[8];
     for (bank = 0; bank < 8; bank++)
@@ -810,12 +831,12 @@ int test_four_addrs_8(unsigned offs) {
     return ret;
 }
 
-static int test_results_32, test_results_16, test_results_8, test_results_float;
+static int test_results_32, test_results_16, test_results_8, test_results_float, test_results_double;
 
 static int test_16bit_sh4_write(void) {
     int retcode = 0;
 
-    unsigned offs = 0;
+    unsigned offs;
     for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 2)
         retcode |= test_single_addr_16(offs);
 
@@ -852,6 +873,16 @@ static int test_float_sh4_write(void) {
     return -retcode;
 }
 
+static int test_double_sh4_write(void) {
+    int retcode = 0;
+
+    unsigned offs;
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 8)
+        retcode |= test_single_addr_double(offs);
+
+    return -retcode;
+}
+
 static int run_tests(void) {
     // this test will overwrite the fb, so temporarily disable video
     disable_video();
@@ -860,6 +891,7 @@ static int run_tests(void) {
     test_results_16 = test_16bit_sh4_write();
     test_results_8  = test_8bit_sh4_write();
     test_results_float = test_float_sh4_write();
+    test_results_double = test_double_sh4_write();
 
     clear_screen(get_backbuffer(), make_color(0, 0, 0));
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
@@ -902,6 +934,12 @@ static int disp_results(void) {
             drawstring(fb, fonts[1], "SUCCESS", 10, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 10, 21);
+
+        drawstring(fb, fonts[4], "     SH4 VRAM DOUBLE", 11, 0);
+        if (test_results_double == 0)
+            drawstring(fb, fonts[1], "SUCCESS", 11, 21);
+        else
+            drawstring(fb, fonts[2], "FAILURE", 11, 21);
 
         while (!check_vblank())
             ;
