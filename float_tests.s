@@ -12,7 +12,6 @@
 .text
 
 test_single_addr_double:
-	sts.l pr, @-r15
 	mov.l r8, @-r15
 	mov.l r9, @-r15
 	mov.l r10, @-r15
@@ -20,6 +19,7 @@ test_single_addr_double:
 	mov.l r12, @-r15
 	mov.l r13, @-r15
 	mov.l r14, @-r15
+	sts.l pr, @-r15
 	mov.l addr_get_all_banks_from32, r8
 
 	mov r4, r9
@@ -278,18 +278,18 @@ test_single_addr_double_on_fail:
 
 test_single_addr_double_done:
 
+        lds r10, fpscr
+
 	add #64, r15
+	lds.l @r15+, pr
 	mov.l @r15+, r14
 	mov.l @r15+, r13
 	mov.l @r15+, r12
 	mov.l @r15+, r11
 	mov.l @r15+, r10
 	mov.l @r15+, r9
-	mov.l @r15+, r8
-	lds.l @r15+, pr
-
 	rts
-        lds r10, fpscr
+	mov.l @r15+, r8
 
 
 ! read a double from two different addresses each pointing to one dword
