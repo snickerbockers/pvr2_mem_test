@@ -49,6 +49,14 @@ static int state;
 void *get_romfont_pointer(void);
 
 int test_single_addr_double(unsigned offs);
+int test_single_addr_sq(unsigned offs);
+
+/*
+ * Performs a write using the store-queues.
+ * src must be 8-byte aligned.
+ * dst must be 32-byte aligned.
+ */
+void write_sq(void const *src, void volatile *dst);
 
 static unsigned get_controller_buttons(void);
 static int check_controller(void);
@@ -831,7 +839,127 @@ int test_four_addrs_8(unsigned offs) {
     return ret;
 }
 
-static int test_results_32, test_results_16, test_results_8, test_results_float, test_results_double;
+int test_single_addr_sq_better(unsigned offs) {
+    unsigned bank;
+    unsigned addrs[8];
+
+    unsigned write_bank;
+    for (write_bank = 0; write_bank < 8; write_bank++) {
+        if (write_bank & 2)
+            get_all_banks_from32(addrs, offs);
+        else
+            get_all_banks_from64(addrs, offs);
+
+        unsigned  volatile *ptrs[8];
+        for (bank = 0; bank < 8; bank++)
+            ptrs[bank] = (unsigned volatile*)addrs[bank];
+
+        __attribute__((aligned(8)))
+            static unsigned const testvals[8*8] = {
+            0xdeadbeef,
+            0xbabeface,
+            0xdeadbabe,
+            0xbeefb00b,
+            0xb16b00b5,
+            0xfeedbabe,
+            0xfeedface,
+            0xaaaa5555,
+
+            0xdeadc0de,
+            0x5555aaaa,
+            0xaaaa5555,
+            0xbabeb00b,
+            0x5555aaaa,
+            0xb16babe5,
+            0x12345678,
+            0x90abcdef,
+
+            0xdeadbeef,
+            0xbabeface,
+            0xdeadbabe,
+            0xbeefb00b,
+            0xdeadc0de,
+            0x5555aaaa,
+            0xaaaa5555,
+            0xbabeb00b,
+
+            0xb16b00b5,
+            0xfeedbabe,
+            0xfeedface,
+            0xaaaa5555,
+            0xdeadc0de,
+            0x5555aaaa,
+            0xaaaa5555,
+            0xbabeb00b,
+
+            0x5555aaaa,
+            0xb16babe5,
+            0x12345678,
+            0x90abcdef,
+            0xdeadbeef,
+            0xbabeface,
+            0xdeadbabe,
+            0xbeefb00b,
+
+            0xaaaa5555,
+            0xbabeb00b,
+            0x5555aaaa,
+            0xb16babe5,
+            0xdeadbabe,
+            0xbeefb00b,
+            0xb16b00b5,
+            0xfeedbabe,
+
+            0xdeadbeef,
+            0xdeadbabe,
+            0xb16b00b5,
+            0xfeedface,
+            0xdeadc0de,
+            0xaaaa5555,
+            0x5555aaaa,
+            0x12345678,
+
+            0xbabeface,
+            0xbeefb00b,
+            0xfeedbabe,
+            0xaaaa5555,
+            0x5555aaaa,
+            0xbabeb00b,
+            0xb16babe5,
+            0x90abcdef
+        };
+
+        int ret = 0;
+
+        unsigned const *src = testvals + (write_bank & ~1) * 8 ;
+        write_sq(src, ptrs[write_bank]);
+
+        unsigned idx;
+        for (idx = 0; idx < 8; idx++) {
+            unsigned chk_bank;
+            for (chk_bank = 0; chk_bank < 8; chk_bank++) {
+                unsigned chk_bank_addrs[8];
+                if (write_bank & 2)
+                    get_all_banks_from32(chk_bank_addrs, addrs[write_bank] + idx * 4);
+                else
+                    get_all_banks_from64(chk_bank_addrs, addrs[write_bank] + idx * 4);
+
+                unsigned volatile *chk_bank_ptr = (unsigned volatile*)(chk_bank_addrs[chk_bank]);
+                if ((chk_bank & 1) == 0) {
+                    if (*chk_bank_ptr != src[idx])
+                        return 1;
+                } else {
+                    if (*chk_bank_ptr != (unsigned)-1)
+                        return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int test_results_32, test_results_16, test_results_8,
+    test_results_float, test_results_double, test_results_sq;
 
 static int test_16bit_sh4_write(void) {
     int retcode = 0;
@@ -883,6 +1011,16 @@ static int test_double_sh4_write(void) {
     return -retcode;
 }
 
+static int test_sq_write(void) {
+    int retcode = 0;
+
+    unsigned offs;
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 32)
+        retcode |= test_single_addr_sq_better(offs);
+
+    return -retcode;
+}
+
 static int run_tests(void) {
     // this test will overwrite the fb, so temporarily disable video
     disable_video();
@@ -892,6 +1030,7 @@ static int run_tests(void) {
     test_results_8  = test_8bit_sh4_write();
     test_results_float = test_float_sh4_write();
     test_results_double = test_double_sh4_write();
+    test_results_sq = test_sq_write();
 
     clear_screen(get_backbuffer(), make_color(0, 0, 0));
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
@@ -940,6 +1079,12 @@ static int disp_results(void) {
             drawstring(fb, fonts[1], "SUCCESS", 11, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 11, 21);
+
+        drawstring(fb, fonts[4], "     SH4 VRAM SQ", 12, 0);
+        if (test_results_sq == 0)
+            drawstring(fb, fonts[1], "SUCCESS", 12, 21);
+        else
+            drawstring(fb, fonts[2], "FAILURE", 12, 21);
 
         while (!check_vblank())
             ;
