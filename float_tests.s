@@ -20,6 +20,8 @@ test_single_addr_double:
 	mov.l r13, @-r15
 	mov.l r14, @-r15
 	sts.l pr, @-r15
+	sts fpscr, r10
+	mov.l r10, @-r15
 	mov.l addr_get_all_banks_from32, r8
 
 	mov r4, r9
@@ -36,7 +38,6 @@ test_single_addr_double:
 	mov r15, r14
 
 	! fix up fpscr
-        sts fpscr, r10
 	mov #3, r2
 	shll8 r2
         shll8 r2
@@ -278,9 +279,8 @@ test_single_addr_double_on_fail:
 
 test_single_addr_double_done:
 
-        lds r10, fpscr
-
 	add #64, r15
+	lds.l @r15+, fpscr
 	lds.l @r15+, pr
 	mov.l @r15+, r14
 	mov.l @r15+, r13
