@@ -10,9 +10,12 @@
  */
 
 static int state;
-#define STATE_MENU                  0
-#define STATE_SH4_VRAM_TEST         1
-#define STATE_SH4_VRAM_TEST_RESULTS 2
+enum {
+    STATE_MENU,
+    STATE_SH4_VRAM_TEST_SLOW,
+    STATE_SH4_VRAM_TEST_FAST,
+    STATE_SH4_VRAM_TEST_RESULTS
+};
 
 #define SPG_HBLANK_INT (*(unsigned volatile*)0xa05f80c8)
 #define SPG_VBLANK_INT (*(unsigned volatile*)0xa05f80cc)
@@ -49,7 +52,6 @@ static int state;
 void *get_romfont_pointer(void);
 
 int test_single_addr_double(unsigned offs);
-int test_single_addr_sq(unsigned offs);
 
 /*
  * Performs a write using the store-queues.
@@ -470,6 +472,11 @@ else
 #define PVR2_TEX_MEM_BANK_SIZE (4 << 20)
 #define PVR2_TOTAL_VRAM_SIZE (8 << 20)
 
+static struct sh4_vram_test_results {
+    int test_results_32, test_results_16, test_results_8,
+        test_results_float, test_results_double, test_results_sq;
+} sh4_vram_test_results;
+
 /*
  * Test that a write to a given address is correctly reflected across all 4
  * mirrors.
@@ -791,7 +798,7 @@ int test_single_addr_16(unsigned offs) {
  * test four sequential one-byte writes.  The kicker here is that one-byte
  * writes never work so we don't expect the value to change.
  */
-int test_four_addrs_8(unsigned offs) {
+int test_single_addr_8(unsigned offs) {
     unsigned bank;
     unsigned addrs[8];
 
@@ -839,7 +846,7 @@ int test_four_addrs_8(unsigned offs) {
     return ret;
 }
 
-int test_single_addr_sq_better(unsigned offs) {
+int test_single_addr_sq(unsigned offs) {
     unsigned bank;
     unsigned addrs[8];
 
@@ -958,79 +965,126 @@ int test_single_addr_sq_better(unsigned offs) {
     return 0;
 }
 
-static int test_results_32, test_results_16, test_results_8,
-    test_results_float, test_results_double, test_results_sq;
-
-static int test_16bit_sh4_write(void) {
-    int retcode = 0;
-
+static int run_sh4_vram_slow_test(void) {
     unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 2)
-        retcode |= test_single_addr_16(offs);
 
-    return -retcode;
-}
-
-static int test_32bit_sh4_write(void) {
-    int retcode = 0;
-
-    unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
-        retcode |= test_single_addr_32(offs);
-
-    return -retcode;
-}
-
-static int test_8bit_sh4_write(void) {
-    int retcode = 0;
-
-    unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs++)
-        retcode |= test_four_addrs_8(offs);
-
-    return -retcode;
-}
-
-static int test_float_sh4_write(void) {
-    int retcode = 0;
-
-    unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
-        retcode |= test_single_addr_float(offs);
-
-    return -retcode;
-}
-
-static int test_double_sh4_write(void) {
-    int retcode = 0;
-
-    unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 8)
-        retcode |= test_single_addr_double(offs);
-
-    return -retcode;
-}
-
-static int test_sq_write(void) {
-    int retcode = 0;
-
-    unsigned offs;
-    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 32)
-        retcode |= test_single_addr_sq_better(offs);
-
-    return -retcode;
-}
-
-static int run_tests(void) {
     // this test will overwrite the fb, so temporarily disable video
     disable_video();
 
-    test_results_32 = test_32bit_sh4_write();
-    test_results_16 = test_16bit_sh4_write();
-    test_results_8  = test_8bit_sh4_write();
-    test_results_float = test_float_sh4_write();
-    test_results_double = test_double_sh4_write();
-    test_results_sq = test_sq_write();
+    sh4_vram_test_results.test_results_32 = 0;
+    sh4_vram_test_results.test_results_16 = 0;
+    sh4_vram_test_results.test_results_8 = 0;
+    sh4_vram_test_results.test_results_float = 0;
+    sh4_vram_test_results.test_results_double = 0;
+    sh4_vram_test_results.test_results_sq = 0;
+
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+        if ((sh4_vram_test_results.test_results_32 = test_single_addr_32(offs)))
+            break;
+
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 2)
+        if ((sh4_vram_test_results.test_results_16 = test_single_addr_16(offs)))
+            break;
+
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs++)
+        if ((sh4_vram_test_results.test_results_8  = test_single_addr_8(offs)))
+            break;
+
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+        if ((sh4_vram_test_results.test_results_float = test_single_addr_float(offs)))
+            break;
+
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 8)
+        if ((sh4_vram_test_results.test_results_double = test_single_addr_double(offs)))
+            break;
+
+    for (offs = 0; offs < PVR2_TOTAL_VRAM_SIZE; offs += 32)
+        if ((sh4_vram_test_results.test_results_sq = test_single_addr_sq(offs)))
+            break;
+
+    clear_screen(get_backbuffer(), make_color(0, 0, 0));
+    clear_screen(get_frontbuffer(), make_color(0, 0, 0));
+    enable_video();
+
+    return STATE_SH4_VRAM_TEST_RESULTS;
+}
+
+/*
+ * This is exactly the same as the slow test but we don't test every single
+ * address.
+ */
+static int run_sh4_vram_fast_test(void) {
+    unsigned offs;
+
+    // this test will overwrite the fb, so temporarily disable video
+    disable_video();
+
+    sh4_vram_test_results.test_results_32 = 0;
+    sh4_vram_test_results.test_results_16 = 0;
+    sh4_vram_test_results.test_results_8 = 0;
+    sh4_vram_test_results.test_results_float = 0;
+    sh4_vram_test_results.test_results_double = 0;
+    sh4_vram_test_results.test_results_sq = 0;
+
+    for (offs = 0; offs < 2048; offs += 4)
+        if ((sh4_vram_test_results.test_results_32 = test_single_addr_32(offs)))
+            break;
+    for (offs = (PVR2_TOTAL_VRAM_SIZE/2)-1024; offs < (PVR2_TOTAL_VRAM_SIZE/2)+1024; offs += 4)
+        if ((sh4_vram_test_results.test_results_32 = test_single_addr_32(offs)))
+            break;
+    for (offs = PVR2_TOTAL_VRAM_SIZE-2048; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+        if ((sh4_vram_test_results.test_results_32 = test_single_addr_32(offs)))
+            break;
+
+    for (offs = 0; offs < 2048; offs += 2)
+        if ((sh4_vram_test_results.test_results_16 = test_single_addr_16(offs)))
+            break;
+    for (offs = (PVR2_TOTAL_VRAM_SIZE/2)-1024; offs < (PVR2_TOTAL_VRAM_SIZE/2)+1024; offs += 2)
+        if ((sh4_vram_test_results.test_results_16 = test_single_addr_16(offs)))
+            break;
+    for (offs = PVR2_TOTAL_VRAM_SIZE-2048; offs < PVR2_TOTAL_VRAM_SIZE; offs += 2)
+        if ((sh4_vram_test_results.test_results_16 = test_single_addr_16(offs)))
+            break;
+
+    for (offs = 0; offs < 2048; offs++)
+        if ((sh4_vram_test_results.test_results_8 = test_single_addr_8(offs)))
+            break;
+    for (offs = (PVR2_TOTAL_VRAM_SIZE/2)-1024; offs < (PVR2_TOTAL_VRAM_SIZE/2)+1024; offs++)
+        if ((sh4_vram_test_results.test_results_8 = test_single_addr_8(offs)))
+            break;
+    for (offs = PVR2_TOTAL_VRAM_SIZE-2048; offs < PVR2_TOTAL_VRAM_SIZE; offs++)
+        if ((sh4_vram_test_results.test_results_8 = test_single_addr_8(offs)))
+            break;
+
+    for (offs = 0; offs < 2048; offs += 4)
+        if ((sh4_vram_test_results.test_results_float = test_single_addr_float(offs)))
+            break;
+    for (offs = (PVR2_TOTAL_VRAM_SIZE/2)-1024; offs < (PVR2_TOTAL_VRAM_SIZE/2)+1024; offs += 4)
+        if ((sh4_vram_test_results.test_results_float = test_single_addr_float(offs)))
+            break;
+    for (offs = PVR2_TOTAL_VRAM_SIZE-2048; offs < PVR2_TOTAL_VRAM_SIZE; offs += 4)
+        if ((sh4_vram_test_results.test_results_float = test_single_addr_float(offs)))
+            break;
+
+    for (offs = 0; offs < 2048; offs += 8)
+        if ((sh4_vram_test_results.test_results_double = test_single_addr_double(offs)))
+            break;
+    for (offs = (PVR2_TOTAL_VRAM_SIZE/2)-1024; offs < (PVR2_TOTAL_VRAM_SIZE/2)+1024; offs += 8)
+        if ((sh4_vram_test_results.test_results_double = test_single_addr_double(offs)))
+            break;
+    for (offs = PVR2_TOTAL_VRAM_SIZE-2048; offs < PVR2_TOTAL_VRAM_SIZE; offs += 8)
+        if ((sh4_vram_test_results.test_results_double = test_single_addr_double(offs)))
+            break;
+
+    for (offs = 0; offs < 2048; offs += 32)
+        if ((sh4_vram_test_results.test_results_sq = test_single_addr_sq(offs)))
+            break;
+    for (offs = (PVR2_TOTAL_VRAM_SIZE/2)-1024; offs < (PVR2_TOTAL_VRAM_SIZE/2)+1024; offs += 32)
+        if ((sh4_vram_test_results.test_results_sq = test_single_addr_sq(offs)))
+            break;
+    for (offs = PVR2_TOTAL_VRAM_SIZE-2048; offs < PVR2_TOTAL_VRAM_SIZE; offs += 32)
+        if ((sh4_vram_test_results.test_results_sq = test_single_addr_sq(offs)))
+            break;
 
     clear_screen(get_backbuffer(), make_color(0, 0, 0));
     clear_screen(get_frontbuffer(), make_color(0, 0, 0));
@@ -1051,37 +1105,37 @@ static int disp_results(void) {
         drawstring(fb, fonts[4], "*****************************************************", 5, 0);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 32-BIT", 7, 0);
-        if (test_results_32 == 0)
+        if (sh4_vram_test_results.test_results_32 == 0)
             drawstring(fb, fonts[1], "SUCCESS", 7, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 7, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 16-BIT", 8, 0);
-        if (test_results_16 == 0)
+        if (sh4_vram_test_results.test_results_16 == 0)
             drawstring(fb, fonts[1], "SUCCESS", 8, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 8, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 8-BIT", 9, 0);
-        if (test_results_8 == 0)
+        if (sh4_vram_test_results.test_results_8 == 0)
             drawstring(fb, fonts[1], "SUCCESS", 9, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 9, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM FLOAT", 10, 0);
-        if (test_results_float == 0)
+        if (sh4_vram_test_results.test_results_float == 0)
             drawstring(fb, fonts[1], "SUCCESS", 10, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 10, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM DOUBLE", 11, 0);
-        if (test_results_double == 0)
+        if (sh4_vram_test_results.test_results_double == 0)
             drawstring(fb, fonts[1], "SUCCESS", 11, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 11, 21);
 
         drawstring(fb, fonts[4], "     SH4 VRAM SQ", 12, 0);
-        if (test_results_sq == 0)
+        if (sh4_vram_test_results.test_results_sq == 0)
             drawstring(fb, fonts[1], "SUCCESS", 12, 21);
         else
             drawstring(fb, fonts[2], "FAILURE", 12, 21);
@@ -1095,6 +1149,20 @@ static int disp_results(void) {
             return STATE_MENU;
     }
 }
+
+#ifndef NULL
+#define NULL ((void*)0x0)
+#endif
+
+static struct menu_entry {
+    char const *txt;
+    unsigned state;
+} const menu_entries[] = {
+    { "SH4 VRAM TEST (FAST)", STATE_SH4_VRAM_TEST_FAST },
+    { "SH4 VRAM TEST (SLOW)", STATE_SH4_VRAM_TEST_SLOW },
+
+    { NULL }
+};
 
 static int main_menu(void) {
     int menupos = 0;
@@ -1118,14 +1186,16 @@ static int main_menu(void) {
         drawstring(fb, fonts[4], "*                                                   *", 4, 0);
         drawstring(fb, fonts[4], "*****************************************************", 5, 0);
 
-        drawstring(fb, fonts[4], "         SH4 VRAM TEST", 7, 0);
-
-        switch (curs) {
-        default:
-            curs = 0;
-        case 0:
-            drawstring(fb, fonts[4], " ======>", 7, 0);
+        unsigned row = 7;
+        unsigned n_ents = 0;
+        struct menu_entry const *cur_ent = menu_entries;
+        while (cur_ent->txt) {
+            drawstring(fb, fonts[4], cur_ent->txt, row++, 9);
+            cur_ent++;
+            n_ents++;
         }
+
+        drawstring(fb, fonts[4], " ======>", curs + 7, 0);
 
         while (!check_vblank())
             ;
@@ -1135,7 +1205,7 @@ static int main_menu(void) {
 
         if (check_btn(1 << 5)) {
             // d-pad down
-            if (curs < 0)
+            if (curs < (n_ents-1))
                 curs++;
         }
 
@@ -1145,8 +1215,16 @@ static int main_menu(void) {
                 curs--;
         }
 
-        if (check_btn(1 << 2)) // a button
-            return STATE_SH4_VRAM_TEST;
+        // a button
+        if (check_btn(1 << 2)) {
+            cur_ent = menu_entries;
+            while (curs) {
+                curs--;
+                cur_ent++;
+            }
+
+            return cur_ent->state;
+        }
     }
 }
 
@@ -1178,27 +1256,20 @@ int dcmain(int argc, char **argv) {
 
     for (;;) {
         switch (state) {
-        case STATE_MENU:
-            state = main_menu();
+        case STATE_SH4_VRAM_TEST_SLOW:
+            state = run_sh4_vram_slow_test();
             break;
-        case STATE_SH4_VRAM_TEST:
-            state = run_tests();
+        case STATE_SH4_VRAM_TEST_FAST:
+            state = run_sh4_vram_fast_test();
             break;
         case STATE_SH4_VRAM_TEST_RESULTS:
             state = disp_results();
             break;
+        default:
+        case STATE_MENU:
+            state = main_menu();
+            break;
         }
-        /* clear_screen(get_backbuffer(), make_color(0, 0, 0)); */
-        /* void volatile *fb = get_backbuffer(); */
-
-        /* drawstring(fb, fonts[3], "HELLO", 0, 0); */
-
-        /* if (success == 0) */
-        /*     drawstring(fb, fonts[1], "SUCCESS", 1, 0); */
-        /* else */
-        /*     drawstring(fb, fonts[2], "FAILURE", 1, 0); */
-
-        /* swap_buffers(); */
     }
 
     return 0;
