@@ -662,7 +662,7 @@ int test_single_addr_float(unsigned offs) {
                           "flds fr0, fpul\n"                            \
                           "sts fpul, r2\n"                              \
                           "cmp/eq r2, r3\n"                             \
-                          "bf/s on_fail_"#bank_no"\n"\
+                          "bf/s on_fail_"#bank_no"\n"                   \
                           "add #4, r0\n"                                \
                                                                         \
                           /* if (*ptrs[7] != 0xffffffff) */             \
@@ -677,7 +677,7 @@ int test_single_addr_float(unsigned offs) {
                           "nop\n"                                       \
                                                                         \
                           "on_fail_"#bank_no":\n"                       \
-                          "mov #1, %[ret]\n"                            \
+                          "mov r5, %[ret]\n"                            \
                                                                         \
                           "done_"#bank_no":\n"                          \
                           /* restore fpscr */                           \
@@ -719,8 +719,6 @@ int test_single_addr_32(unsigned offs) {
         0x5555aaaa
     };
 
-    int ret = 0;
-
 #define CHECK_BANK_32BIT(bank_no)               \
     *ptrs[bank_no] = testvals[bank_no];         \
     if (*ptrs[0] != testvals[bank_no & ~1] ||   \
@@ -731,7 +729,7 @@ int test_single_addr_32(unsigned offs) {
         *ptrs[5] != 0xffffffff ||               \
         *ptrs[6] != testvals[bank_no & ~1] ||   \
         *ptrs[7] != 0xffffffff) {               \
-        ret |= (1 << bank_no);                  \
+        return (int)ptrs[bank_no];              \
     }
 
     CHECK_BANK_32BIT(0)
@@ -743,7 +741,7 @@ int test_single_addr_32(unsigned offs) {
     CHECK_BANK_32BIT(6)
     CHECK_BANK_32BIT(7)
 
-    return ret;
+    return 0;
 }
 
 int test_single_addr_16(unsigned offs) {
@@ -767,8 +765,6 @@ int test_single_addr_16(unsigned offs) {
         0x5a5a
     };
 
-    int ret = 0;
-
 #define CHECK_BANK_16BIT(bank_no)               \
     *ptrs[bank_no] = testvals[bank_no];         \
     if (*ptrs[0] != testvals[bank_no & ~1] ||   \
@@ -779,7 +775,7 @@ int test_single_addr_16(unsigned offs) {
         *ptrs[5] != 0xffff ||                   \
         *ptrs[6] != testvals[bank_no & ~1] ||   \
         *ptrs[7] != 0xffff) {                   \
-        ret |= (1 << bank_no);                  \
+        return (int)ptrs[bank_no];              \
     }
 
     CHECK_BANK_16BIT(0)
@@ -791,7 +787,7 @@ int test_single_addr_16(unsigned offs) {
     CHECK_BANK_16BIT(6)
     CHECK_BANK_16BIT(7)
 
-    return ret;
+    return 0;
 }
 
 /*
@@ -819,8 +815,6 @@ int test_single_addr_8(unsigned offs) {
         0x0b
     };
 
-    int ret = 0;
-
 #define CHECK_BANK_8BIT(bank_no)                        \
     *ptrs[bank_no] = testvals[bank_no];                 \
     if (*ptrs[0] != testvals[bank_no & ~1] ||           \
@@ -831,7 +825,7 @@ int test_single_addr_8(unsigned offs) {
         *ptrs[5] != 0xff ||                             \
         *ptrs[6] != testvals[bank_no & ~1] ||           \
         *ptrs[7] != 0xff) {                             \
-        ret |= (1 << bank_no);                          \
+        return (int)ptrs[bank_no];                      \
     }
 
     CHECK_BANK_8BIT(0)
@@ -843,7 +837,7 @@ int test_single_addr_8(unsigned offs) {
     CHECK_BANK_8BIT(6)
     CHECK_BANK_8BIT(7)
 
-    return ret;
+    return 0;
 }
 
 int test_single_addr_sq(unsigned offs) {
@@ -954,10 +948,10 @@ int test_single_addr_sq(unsigned offs) {
                 unsigned volatile *chk_bank_ptr = (unsigned volatile*)(chk_bank_addrs[chk_bank]);
                 if ((chk_bank & 1) == 0) {
                     if (*chk_bank_ptr != src[idx])
-                        return 1;
+                        return (int)ptrs[write_bank];
                 } else {
                     if (*chk_bank_ptr != (unsigned)-1)
-                        return 1;
+                        return (int)ptrs[write_bank];
                 }
             }
         }
@@ -1105,40 +1099,58 @@ static int disp_results(void) {
         drawstring(fb, fonts[4], "*****************************************************", 5, 0);
 
         drawstring(fb, fonts[4], "     SH4 VRAM 32-BIT", 7, 0);
-        if (sh4_vram_test_results.test_results_32 == 0)
+        if (sh4_vram_test_results.test_results_32 == 0) {
             drawstring(fb, fonts[1], "SUCCESS", 7, 21);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 7, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE - ", 7, 21);
+            drawstring(fb, fonts[2],
+                       hexstr(sh4_vram_test_results.test_results_32), 7, 31);
+        }
 
         drawstring(fb, fonts[4], "     SH4 VRAM 16-BIT", 8, 0);
-        if (sh4_vram_test_results.test_results_16 == 0)
+        if (sh4_vram_test_results.test_results_16 == 0) {
             drawstring(fb, fonts[1], "SUCCESS", 8, 21);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 8, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE - ", 8, 21);
+            drawstring(fb, fonts[2],
+                       hexstr(sh4_vram_test_results.test_results_32), 7, 31);
+        }
 
         drawstring(fb, fonts[4], "     SH4 VRAM 8-BIT", 9, 0);
-        if (sh4_vram_test_results.test_results_8 == 0)
+        if (sh4_vram_test_results.test_results_8 == 0) {
             drawstring(fb, fonts[1], "SUCCESS", 9, 21);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 9, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE - ", 9, 21);
+            drawstring(fb, fonts[2],
+                       hexstr(sh4_vram_test_results.test_results_32), 7, 31);
+        }
 
         drawstring(fb, fonts[4], "     SH4 VRAM FLOAT", 10, 0);
-        if (sh4_vram_test_results.test_results_float == 0)
+        if (sh4_vram_test_results.test_results_float == 0) {
             drawstring(fb, fonts[1], "SUCCESS", 10, 21);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 10, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE - ", 10, 21);
+            drawstring(fb, fonts[2],
+                       hexstr(sh4_vram_test_results.test_results_32), 7, 31);
+        }
 
         drawstring(fb, fonts[4], "     SH4 VRAM DOUBLE", 11, 0);
-        if (sh4_vram_test_results.test_results_double == 0)
+        if (sh4_vram_test_results.test_results_double == 0) {
             drawstring(fb, fonts[1], "SUCCESS", 11, 21);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 11, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE - ", 11, 21);
+            drawstring(fb, fonts[2],
+                       hexstr(sh4_vram_test_results.test_results_32), 7, 31);
+        }
 
         drawstring(fb, fonts[4], "     SH4 VRAM SQ", 12, 0);
-        if (sh4_vram_test_results.test_results_sq == 0)
+        if (sh4_vram_test_results.test_results_sq == 0) {
             drawstring(fb, fonts[1], "SUCCESS", 12, 21);
-        else
-            drawstring(fb, fonts[2], "FAILURE", 12, 21);
+        } else {
+            drawstring(fb, fonts[2], "FAILURE - ", 12, 21);
+            drawstring(fb, fonts[2],
+                       hexstr(sh4_vram_test_results.test_results_32), 7, 31);
+        }
 
         while (!check_vblank())
             ;

@@ -274,8 +274,11 @@ please_kill_me_now:
 	xor r0, r0
 
 test_single_addr_double_on_fail:
+	! get pointer to address we last wrote to
+	mov r8, r0
+	shll2 r0
 	bra test_single_addr_double_done
-	mov #1, r0
+	mov.l @(r0, r13), r0
 
 test_single_addr_double_done:
 
