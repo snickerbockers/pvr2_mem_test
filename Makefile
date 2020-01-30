@@ -28,11 +28,14 @@ float_tests.o: float_tests.s
 store_queue.o: store_queue.s
 	$(AS) -little -o store_queue.o store_queue.s
 
-pvr2_mem_test.elf: init.o float_tests.o main.o store_queue.o
-	$(CC) -Wl,-e_start,-Ttext,0x8c010000 init.o float_tests.o store_queue.o main.o -o pvr2_mem_test.elf -nostartfiles -nostdlib -lgcc -m4
+pvr2_mem_test.elf: init.o float_tests.o main.o store_queue.o dma_tests.o
+	$(CC) -Wl,-e_start,-Ttext,0x8c010000 init.o float_tests.o store_queue.o main.o dma_tests.o -o pvr2_mem_test.elf -nostartfiles -nostdlib -lgcc -m4
 
 pvr2_mem_test.bin: pvr2_mem_test.elf
 	$(OBJCOPY) -O binary -j .text -j .data -j .bss -j .rodata  --set-section-flags .bss=alloc,load,contents pvr2_mem_test.elf pvr2_mem_test.bin
 
-main.o: main.c
+main.o: main.c pvr2_mem_test.h
 	$(CC) -c main.c -nostartfiles -nostdlib
+
+dma_tests.o: dma_tests.c pvr2_mem_test.h
+	$(CC) -c dma_tests.c -nostartfiles -nostdlib

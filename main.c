@@ -9,13 +9,9 @@
  * ----------------------------------------------------------------------------
  */
 
+#include "pvr2_mem_test.h"
+
 static int state;
-enum {
-    STATE_MENU,
-    STATE_SH4_VRAM_TEST_SLOW,
-    STATE_SH4_VRAM_TEST_FAST,
-    STATE_SH4_VRAM_TEST_RESULTS
-};
 
 #define SPG_HBLANK_INT (*(unsigned volatile*)0xa05f80c8)
 #define SPG_VBLANK_INT (*(unsigned volatile*)0xa05f80cc)
@@ -85,15 +81,15 @@ static void configure_video(void) {
     cur_framebuffer = FRAMEBUFFER_1;
 }
 
-static void disable_video(void) {
+void disable_video(void) {
     FB_R_CTRL &= ~1;
 }
 
-static void enable_video(void) {
+void enable_video(void) {
     FB_R_CTRL |= 1;
 }
 
-static void clear_screen(void volatile* fb, unsigned short color) {
+void clear_screen(void volatile* fb, unsigned short color) {
     unsigned color_2pix = ((unsigned)color) | (((unsigned)color) << 16);
 
     unsigned volatile *row_ptr = (unsigned volatile*)fb;
@@ -104,7 +100,7 @@ static void clear_screen(void volatile* fb, unsigned short color) {
             *row_ptr++ = color_2pix;
 }
 
-static unsigned short make_color(unsigned red, unsigned green, unsigned blue) {
+unsigned short make_color(unsigned red, unsigned green, unsigned blue) {
     if (red > 255)
         red = 255;
     if (green > 255)
@@ -184,8 +180,8 @@ static void draw_char(void volatile *fb, unsigned short const *font,
     draw_glyph(fb, font, glyph, x, y);
 }
 
-static void drawstring(void volatile *fb, unsigned short const *font,
-                       char const *msg, unsigned row, unsigned col) {
+void drawstring(void volatile *fb, unsigned short const *font,
+                char const *msg, unsigned row, unsigned col) {
     while (*msg) {
         if (col >= MAX_CHARS_X) {
             col = 0;
@@ -203,7 +199,7 @@ static void drawstring(void volatile *fb, unsigned short const *font,
 
 #define REG_ISTNRM (*(unsigned volatile*)0xA05F6900)
 
-static void swap_buffers(void) {
+void swap_buffers(void) {
     if (cur_framebuffer == FRAMEBUFFER_1) {
         FB_R_SOF1 = FB_R_SOF1_FRAME2;
         FB_R_SOF2 = FB_R_SOF2_FRAME2;
@@ -215,7 +211,7 @@ static void swap_buffers(void) {
     }
 }
 
-static void volatile *get_backbuffer(void) {
+void volatile *get_backbuffer(void) {
     if (cur_framebuffer == FRAMEBUFFER_1)
         return FRAMEBUFFER_2;
     else
@@ -226,7 +222,7 @@ static void volatile *get_frontbuffer(void) {
     return cur_framebuffer;
 }
 
-static int check_vblank(void) {
+int check_vblank(void) {
     int ret = (REG_ISTNRM & (1 << 3)) ? 1 : 0;
     if (ret)
         REG_ISTNRM = (1 << 3);
@@ -382,7 +378,7 @@ int check_btn(int btn_no) {
 #define N_CHAR_ROWS MAX_CHARS_Y
 #define N_CHAR_COLS MAX_CHARS_X
 
-static char const *hexstr(unsigned val) {
+char const *hexstr(unsigned val) {
     static char txt[8];
     unsigned nib_no;
     for (nib_no = 0; nib_no < 8; nib_no++) {
@@ -452,8 +448,7 @@ static char const *hexstr_no_leading_0(unsigned val) {
     return retstr;
 }
 
-#define N_FONTS 6
-static unsigned short fonts[N_FONTS][288 * 24 * 12];
+unsigned short fonts[N_FONTS][288 * 24 * 12];
 
 /*
 TRANSLATE 32 BIT AREA to 64 BIT
@@ -1172,6 +1167,7 @@ static struct menu_entry {
 } const menu_entries[] = {
     { "SH4 VRAM TEST (FAST)", STATE_SH4_VRAM_TEST_FAST },
     { "SH4 VRAM TEST (SLOW)", STATE_SH4_VRAM_TEST_SLOW },
+    { "DMA TEST", STATE_DMA_TEST },
 
     { NULL }
 };
@@ -1276,6 +1272,12 @@ int dcmain(int argc, char **argv) {
             break;
         case STATE_SH4_VRAM_TEST_RESULTS:
             state = disp_results();
+            break;
+        case STATE_DMA_TEST:
+            state = run_dma_tests();
+            break;
+        case STATE_DMA_TEST_RESULTS:
+            state = show_dma_test_results();
             break;
         default:
         case STATE_MENU:
