@@ -45,6 +45,19 @@ _start:
 	jsr @r0
 	nop
 
+	! configure IRQs
+	mov.l vbr_val, r1
+	! mov.l @r1, r1
+	ldc r1, vbr
+	! mov.l icr_addr, r1
+	! mov.w @r1, r0
+	! or #0x80, r0
+	! mov.w r0, @r1
+
+	mov.l default_sr_val, r1
+	ldc r1, sr
+
+	! call dcmain
 	mov.l main_addr, r0
 	jsr @r0
 	nop
@@ -72,6 +85,13 @@ ccr_val:
 	! enable caching
 	.long 0x090d
 
+icr_addr:
+	! interrupt control register
+	.long 0xffd00000
+
+default_sr_val:
+	.long 0x40000040
+	! .long 0x40000000
 
 	mov.l main_addr, r0
 	jsr @r0
@@ -84,6 +104,9 @@ nocache_ptr_mask:
 	.long 0x1fffffff
 nocache_ptr_val:
 	.long 0xa0000000
+vbr_val:
+	.long vecbase
+
 
 	.align 4
 get_romfont_pointer:

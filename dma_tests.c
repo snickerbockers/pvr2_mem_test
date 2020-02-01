@@ -29,6 +29,8 @@
 #define LMMODE0 (*(unsigned volatile*)0xa05f6884)
 #define LMMODE1 (*(unsigned volatile*)0xa05f6888)
 
+#define IML6NRM (*(unsigned volatile*)0xa05f6930)
+
 // source address increment
 enum addr_inc_mode {
     SAR_INC_FIXED = 0,
@@ -39,6 +41,8 @@ enum addr_inc_mode {
 #define ERROR_INVAL 1
 
 static int spin_count;
+
+extern volatile int irq_count;
 
 int pvr2_dma_xfer(void *src, void *dst, unsigned n_units,
                   enum addr_inc_mode src_inc_mode,
@@ -95,17 +99,22 @@ int pvr2_dma_xfer(void *src, void *dst, unsigned n_units,
     C2DSTAT = (unsigned)dst;
     C2DLEN = n_units * tx_unit_sz_bytes;
 
-    IML2NRM &= ~(1 << 19);
-    IML4NRM &= ~(1 << 19);
-    IML6NRM &= ~(1 << 19);
-
     /* IML2NRM |= (1 << 19); */
-    ISTNRM |= (1<<19);
+    /* ISTNRM |= (1<<19); */
+
+    /* IML2NRM &= ~(1 << 19); */
+    /* IML4NRM &= ~(1 << 19); */
+    /* IML6NRM |= (1 << 19); */
+    IML2NRM = 0;
+    IML4NRM = 0;
+    IML6NRM = (1 << 19);
 
     C2DST = 1;
 
     spin_count = 0;
-    while (!(ISTNRM & (1<<19)))
+    int irq_count_orig = irq_count;
+    /* while (!(ISTNRM & (1<<19))) */
+    while (irq_count_orig == irq_count)
         spin_count++;
 
     if (DMATCR2)
@@ -115,6 +124,7 @@ int pvr2_dma_xfer(void *src, void *dst, unsigned n_units,
         return 1;
 
     // TODO: test C2DSTAT, other registers too
+    IML6NRM &= ~(1 << 19);
 
     return 0;
 }
@@ -152,6 +162,7 @@ static int run_single_test(unsigned n_dwords) {
 
 #define N_TRIALS 19
 static int trial_results[N_TRIALS];
+static int trial_irq_counts[N_TRIALS];
 
 #define RESULTS_PER_PAGE (476 / 24)
 
@@ -179,6 +190,8 @@ int run_dma_tests(void) {
     unsigned cur_trial;
     for (trial_no = 0; trial_no < N_TRIALS; trial_no++) {
         trial_results[trial_no] = run_single_test(n_dwords);
+        trial_irq_counts[trial_no] = irq_count;
+        /* wtf[trial_no] = wtf_istnrm; */
         n_dwords *= 2;
     }
 
@@ -198,6 +211,8 @@ int show_dma_test_results(void) {
                 drawstring(fb, fonts[1], "SUCCESS", row, 21);
             else
                 drawstring(fb, fonts[2], "FAILURE", row, 21);
+            drawstring(fb, fonts[4], hexstr(trial_irq_counts[row]), row, 29);
+            /* drawstring(fb, fonts[4], hexstr(wtf[row]), row, 38); */
         }
 
         /* if (test_results != 0) { */
