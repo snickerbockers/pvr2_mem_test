@@ -29,21 +29,20 @@ irq_entry:
 	shll r2
 	mov.l r2, @r0
 
-	! read from ISTNRM again and write to it again.
-	! This is a strange and (AFAIK) undocumented quirk of hollywood.
-	! The first time we wrote to ISTNRM, that successfully cleared bit 19.
-	! However, the interrupt is still being generated until we write to it
-	! again.  This is surprising and I don't understand why it is
-	! necessary, but it is.
+	! read from ISTNRM twice more
 	!
-	! Since the first write to ISTNRM did successfully clear the bit, it
+	! when we wrote to ISTNRM, that successfully cleared bit 19.
+	! However, the interrupt is still being generated until we write to it
+	! or read from it again.  This appears to be a bug on real hardware.
+	!
+	! Since the initial write to ISTNRM did successfully clear the bit, it
 	! would be safe to omit the second write and instead rely upon the
 	! filtering code below to ignore the second IRQ.  I'd expect that
 	! most/all programs do this since Dreamcast multiplexes most interrupts
 	! together onto a single line, and that is why I've never heard of
 	! anybody else getting snagged on this behavior.
 	mov.l @r0, r3
-	mov.l r2, @r0
+	mov.l @r0, r3
 
 	! IRQ filtering code, we would need this if there was more than one IRQ
 	! unmasked in hollywood, or if we hadn't written to ISTNRM twice as
