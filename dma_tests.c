@@ -176,7 +176,7 @@ static void cache_flush(void *addr) {
                          : [ptr] "r" (addr));
 }
 
-static int run_single_test(unsigned n_dwords) {
+static int run_single_test(unsigned n_dwords, unsigned which_bus) {
     unsigned idx;
     unsigned offs = (8*1024*1024) - n_dwords*4;
 
@@ -186,7 +186,8 @@ static int run_single_test(unsigned n_dwords) {
         return -1;
     }
 
-    int volatile *res = (int volatile*)(0xa4000000+offs);
+    unsigned base = which_bus ? 0xa5000000 : 0xa4000000;
+    int volatile *res = (int volatile*)(base+offs);
     if (res[0] != 1 || res[1] != 1)
         return -1;
     for (idx = 2; idx < n_dwords; idx++)
@@ -203,7 +204,7 @@ static struct timer_results ticks[N_TRIALS];
 
 #define RESULTS_PER_PAGE (476 / 24)
 
-int run_dma_tests(void) {
+int run_dma_tests(unsigned which_bus) {
     int idx;
 
     disable_video();
@@ -218,14 +219,14 @@ int run_dma_tests(void) {
     for (idx = 0; idx < N_TEST_VALS; idx++)
         cache_flush(test_data + idx);
 
-    LMMODE0 = 0;
-    LMMODE1 = 0;
+    LMMODE0 = which_bus;
+    LMMODE1 = which_bus;
 
     unsigned n_dwords = 8;
     unsigned trial_no;
     unsigned cur_trial;
     for (trial_no = 0; trial_no < N_TRIALS; trial_no++) {
-        trial_results[trial_no] = run_single_test(n_dwords);
+        trial_results[trial_no] = run_single_test(n_dwords, which_bus);
         trial_irq_counts[trial_no] = irq_count;
         ticks[trial_no] = timer_results;
         n_dwords *= 2;

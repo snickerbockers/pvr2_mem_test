@@ -14,11 +14,12 @@ enum {
     STATE_SH4_VRAM_TEST_SLOW,
     STATE_SH4_VRAM_TEST_FAST,
     STATE_SH4_VRAM_TEST_RESULTS,
-    STATE_DMA_TEST,
+    STATE_DMA_TEST_64BIT,
+    STATE_DMA_TEST_32BIT,
     STATE_DMA_TEST_RESULTS
 };
 
-int run_dma_tests(void);
+int run_dma_tests(unsigned which_bus);
 int show_dma_test_results(void);
 void drawstring(void volatile *fb, unsigned short const *font,
                 char const *msg, unsigned row, unsigned col);

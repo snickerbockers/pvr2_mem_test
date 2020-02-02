@@ -1167,7 +1167,8 @@ static struct menu_entry {
 } const menu_entries[] = {
     { "SH4 VRAM TEST (FAST)", STATE_SH4_VRAM_TEST_FAST },
     { "SH4 VRAM TEST (SLOW)", STATE_SH4_VRAM_TEST_SLOW },
-    { "DMA TEST", STATE_DMA_TEST },
+    { "DMA TEST (64-BIT)", STATE_DMA_TEST_64BIT },
+    { "DMA TEST (32-BIT)", STATE_DMA_TEST_32BIT },
 
     { NULL }
 };
@@ -1273,8 +1274,11 @@ int dcmain(int argc, char **argv) {
         case STATE_SH4_VRAM_TEST_RESULTS:
             state = disp_results();
             break;
-        case STATE_DMA_TEST:
-            state = run_dma_tests();
+        case STATE_DMA_TEST_32BIT:
+            state = run_dma_tests(1);
+            break;
+        case STATE_DMA_TEST_64BIT:
+            state = run_dma_tests(0);
             break;
         case STATE_DMA_TEST_RESULTS:
             state = show_dma_test_results();
