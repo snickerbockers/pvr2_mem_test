@@ -13,6 +13,7 @@
 	.globl vecbase
 	.globl irq_count
 	.globl wtf_istnrm
+	.globl n_timer_overflows
 
 .align 2
 vecbase:
@@ -20,6 +21,25 @@ vecbase:
 	rte
 	nop
 irq_entry:
+	mov.l addr_intevt, r0
+	mov.l @r0, r0
+	mov.l irq_code_holly, r1
+	cmp/eq r0, r1
+	bt holly_int
+	mov.l irq_code_tuni0, r1
+	cmp/eq r0, r1
+	bt tuni0_int
+	bra kill_me_now
+	nop
+
+tuni0_int:
+	mov.l addr_n_timer_overflows, r0
+	mov.l @r0, r1
+	add #1, r1
+	bra kill_me_now
+	mov.l r1, @r0
+
+holly_int:
 	mov.l addr_istnrm, r0
 	mov.l @r0, r1
 	mov #1, r2
@@ -67,10 +87,20 @@ kill_me_now:
 	rte
 	nop
 
-.align 4
+	.align 4
+addr_intevt:
+	.long 0xff000028
+irq_code_holly:
+	.long 0x320
+irq_code_tuni0:
+	.long 0x400
 addr_irq_count:
 	.long irq_count
 irq_count:
 	.long 0
 addr_istnrm:
 	.long 0xa05f6900
+addr_n_timer_overflows:
+	.long n_timer_overflows
+n_timer_overflows:
+	.long 0

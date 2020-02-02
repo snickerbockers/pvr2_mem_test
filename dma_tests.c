@@ -26,10 +26,17 @@
 #define IML4NRM (*(unsigned volatile*)0xa05f6920)
 #define IML6NRM (*(unsigned volatile*)0xa05f6930)
 
+#define IPRA (*(unsigned short volatile*)0xffd00004)
+
 #define LMMODE0 (*(unsigned volatile*)0xa05f6884)
 #define LMMODE1 (*(unsigned volatile*)0xa05f6888)
 
-#define IML6NRM (*(unsigned volatile*)0xa05f6930)
+// SH4 TMU registers
+#define TOCR  (*(unsigned char volatile*)0xffd80000)
+#define TSTR  (*(unsigned char volatile*)0xffd80004)
+#define TCOR0 (*(unsigned volatile*)0xffd80008)
+#define TCNT0 (*(unsigned volatile*)0xffd8000c)
+#define TCR0  (*(unsigned short volatile*)0xffd80010)
 
 // source address increment
 enum addr_inc_mode {
@@ -40,9 +47,43 @@ enum addr_inc_mode {
 
 #define ERROR_INVAL 1
 
-static int spin_count;
-
 extern volatile int irq_count;
+extern volatile unsigned n_timer_overflows;
+
+static struct timer_results {
+    unsigned n_ticks;
+    unsigned n_overflows;
+} timer_results;
+
+#define MAX_TICKS (~0)
+
+static void tmu_start(void) {
+    TSTR = 0;
+
+    n_timer_overflows = 0;
+
+    TOCR = 0; // use the external clock (100MHz) as TMU input
+
+    TCNT0 = MAX_TICKS; // initialize counter to maximum value
+    TCOR0 = MAX_TICKS; // re-initialize counter to maximum value after underflow
+    TCR0 = (1<<5); // clock/4, irq enabled
+
+    IPRA |= 0xf000;
+
+    TSTR = 1; // begin timer channel 0
+}
+
+static struct timer_results tmu_stop(void) {
+    struct timer_results res = {
+        MAX_TICKS - TCNT0,
+        n_timer_overflows
+    };
+    TCR0 = 0;
+    TSTR = 0;
+    return res;
+}
+
+static int countdown;
 
 int pvr2_dma_xfer(void *src, void *dst, unsigned n_units,
                   enum addr_inc_mode src_inc_mode,
@@ -99,23 +140,19 @@ int pvr2_dma_xfer(void *src, void *dst, unsigned n_units,
     C2DSTAT = (unsigned)dst;
     C2DLEN = n_units * tx_unit_sz_bytes;
 
-    /* IML2NRM |= (1 << 19); */
-    /* ISTNRM |= (1<<19); */
-
-    /* IML2NRM &= ~(1 << 19); */
-    /* IML4NRM &= ~(1 << 19); */
-    /* IML6NRM |= (1 << 19); */
     IML2NRM = 0;
     IML4NRM = 0;
     IML6NRM = (1 << 19);
 
+    tmu_start();
+
     C2DST = 1;
 
-    spin_count = 0;
     int irq_count_orig = irq_count;
-    /* while (!(ISTNRM & (1<<19))) */
     while (irq_count_orig == irq_count)
-        spin_count++;
+        ;
+
+    timer_results = tmu_stop();
 
     if (DMATCR2)
         return 1;
@@ -131,7 +168,6 @@ int pvr2_dma_xfer(void *src, void *dst, unsigned n_units,
 
 #define N_TEST_VALS (8*1024*1024/4)
 __attribute__((aligned (32))) static unsigned test_data[N_TEST_VALS];
-/* static int test_results;  */
 
 static void cache_flush(void *addr) {
     __asm__ __volatile__(
@@ -163,6 +199,7 @@ static int run_single_test(unsigned n_dwords) {
 #define N_TRIALS 19
 static int trial_results[N_TRIALS];
 static int trial_irq_counts[N_TRIALS];
+static struct timer_results ticks[N_TRIALS];
 
 #define RESULTS_PER_PAGE (476 / 24)
 
@@ -170,7 +207,6 @@ int run_dma_tests(void) {
     int idx;
 
     disable_video();
-    /* test_results = -1; */
     for (idx = 0; idx < N_TRIALS; idx++)
         trial_results[idx] = -1;
 
@@ -191,7 +227,7 @@ int run_dma_tests(void) {
     for (trial_no = 0; trial_no < N_TRIALS; trial_no++) {
         trial_results[trial_no] = run_single_test(n_dwords);
         trial_irq_counts[trial_no] = irq_count;
-        /* wtf[trial_no] = wtf_istnrm; */
+        ticks[trial_no] = timer_results;
         n_dwords *= 2;
     }
 
@@ -206,21 +242,15 @@ int show_dma_test_results(void) {
 
         unsigned row;
         for (row = 0; row < RESULTS_PER_PAGE && row < N_TRIALS; row++) {
-            drawstring(fb, fonts[4], hexstr(32 << row), row, 12);
+            drawstring(fb, fonts[4], hexstr(32 << row), row, 4);
             if (trial_results[row] == 0)
-                drawstring(fb, fonts[1], "SUCCESS", row, 21);
+                drawstring(fb, fonts[1], "SUCCESS", row, 13);
             else
-                drawstring(fb, fonts[2], "FAILURE", row, 21);
-            drawstring(fb, fonts[4], hexstr(trial_irq_counts[row]), row, 29);
-            /* drawstring(fb, fonts[4], hexstr(wtf[row]), row, 38); */
+                drawstring(fb, fonts[2], "FAILURE", row, 13);
+            drawstring(fb, fonts[4], hexstr(trial_irq_counts[row]), row, 21);
+            drawstring(fb, fonts[4], hexstr(ticks[row].n_overflows), row, 30);
+            drawstring(fb, fonts[4], hexstr(ticks[row].n_ticks), row, 39);
         }
-
-        /* if (test_results != 0) { */
-        /*     drawstring(fb, fonts[2], "DMA TEST FAILS", 7, 21); */
-        /* } else { */
-        /*     drawstring(fb, fonts[1], "DMA TEST SUCCEEDS", 7, 21); */
-        /* } */
-        /* drawstring(fb, fonts[4], hexstr(n_trials), 9, 21); */
 
         while (!check_vblank())
             ;

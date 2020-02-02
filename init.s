@@ -90,8 +90,8 @@ icr_addr:
 	.long 0xffd00000
 
 default_sr_val:
-	.long 0x40000040
-	! .long 0x40000000
+	! .long 0x40000040
+	.long 0x40000000
 
 	mov.l main_addr, r0
 	jsr @r0
