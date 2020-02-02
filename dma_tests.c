@@ -235,6 +235,20 @@ int run_dma_tests(void) {
     return STATE_DMA_TEST_RESULTS;
 }
 
+/*
+ * This test draws four columns
+ * leftmost column is the size of the transfer, in bytes
+ * the next column is success/fail for DMA behavior conformance
+ * the next column is number of times the counter overflowed during the DMA xfer
+ * rightmost column is number of ticks remaining, not including the overflows
+ *     in the middle column.
+ * the "ticks" here have a frequency of (50/4) MHz.  So divide the number of ticks
+ * by (50 * 1024 * 1024) to get seconds.
+ * The overflows happen every (1<<32) ticks.  So each overflow is worth
+ * (1 << 32) ticks, or 327.68 seconds.  Unsurprisingly, this test never
+ * overflows because 328 seconds would be a really insanely long time for DMA
+ * to complete.  lol.
+ */
 int show_dma_test_results(void) {
     for (;;) {
         void volatile *fb = get_backbuffer();
