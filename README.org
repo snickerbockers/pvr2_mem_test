@@ -1,0 +1,60 @@
+* PowerVR2 Memory Test
+
+** abstract
+
+This is a test I wrote to ensure that SH4 writes to the PowerVR2
+memory are correctly reflected across all mirrors.
+
+PowerVR2 has a total of 8MB of VRAM on the Dreamcast.  The VRAM is split
+between two banks which are both 4MB long.  Each mirror access VRAM through
+either the 32-bit bus or the 64-bit bus.
+The 64-bit bus optimizes bandwidth by interleaving the two banks together so
+that it alternates between banks every four bytes.
+The 32-bit bus stores the two banks sequentially, so that the first four
+megabytes are the entirety of one bank and the second four bytes are the
+entirety of the second bus.
+
+Although the two busses are referred to as "32-bit" and "64-bit", that has
+no bearing on the size of reads and writes.  The names refer to the 64-bit
+bus being able to access both banks at once due to the interleaving, and the
+32-bit bus being unable to do so.
+
+** test cases
+
+*** SH4 VRAM Test (FAST)
+this tests several VRAM addresses to ensure they mirror correctly for
+every size of write.
+
+*** SH4 VRAM Test (SLOW)
+this is like the fast version except it tests all 8MB of VRAM.  This
+test is extremely slow and may take up to 30 minutes to complete.
+While this test is running the screen will be blank and you may think
+that your dreamcast has crashed but it's actually still running and
+you just need to be really really patient with it.
+
+*** DMA Test (64-bit)
+
+tests that DMA transfers to PVR2 through the 64-bit path work as
+expected.  Make sure your emulator respects the LMMODE0/LMMODE1
+registers (0x5f6884 and 0x5f6888 respectively)!
+
+see "DMA test results" below for an explanation of the results screen
+
+*** DMA Test(32-bit)
+
+same as above but for the 32-bit path instead of the 64-bit path
+
+*** DMA test results
+
+This test draws four columns
+leftmost column is the size of the transfer, in bytes
+the next column is success/fail for DMA behavior conformance
+the next column is number of times the counter overflowed during the DMA xfer
+rightmost column is number of ticks remaining, not including the overflows
+in the middle column.
+the "ticks" here have a frequency of (50/4) MHz.  So divide the number of ticks
+by (50 * 1024 * 1024) to get seconds.
+The overflows happen every (1<<32) ticks.  So each overflow is worth
+(1 << 32) ticks, or 327.68 seconds.  Unsurprisingly, this test never
+overflows because 328 seconds would be a really insanely long time for DMA
+to complete.  lol.
