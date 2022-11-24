@@ -11,9 +11,9 @@
 
 	.globl irq_entry
 	.globl vecbase
-	.globl irq_count
+	.globl _irq_count
 	.globl wtf_istnrm
-	.globl n_timer_overflows
+	.globl _n_timer_overflows
 
 .align 2
 vecbase:
@@ -95,12 +95,12 @@ irq_code_holly:
 irq_code_tuni0:
 	.long 0x400
 addr_irq_count:
-	.long irq_count
-irq_count:
+	.long _irq_count
+_irq_count:
 	.long 0
 addr_istnrm:
 	.long 0xa05f6900
 addr_n_timer_overflows:
-	.long n_timer_overflows
-n_timer_overflows:
+	.long _n_timer_overflows
+_n_timer_overflows:
 	.long 0

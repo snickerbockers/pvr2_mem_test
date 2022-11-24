@@ -10,7 +10,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 .globl _start
-.globl get_romfont_pointer
+.globl _get_romfont_pointer
 
 .text
 
@@ -99,7 +99,7 @@ default_sr_val:
 
 	.align 4
 main_addr:
-	.long dcmain
+	.long _dcmain
 nocache_ptr_mask:
 	.long 0x1fffffff
 nocache_ptr_val:
@@ -109,7 +109,7 @@ vbr_val:
 
 
 	.align 4
-get_romfont_pointer:
+_get_romfont_pointer:
 	mov.l romfont_fn_ptr, r1
 	mov.l @r1, r1
 

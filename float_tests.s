@@ -7,11 +7,11 @@
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-.globl test_single_addr_double
+.globl _test_single_addr_double
 
 .text
 
-test_single_addr_double:
+_test_single_addr_double:
 	mov.l r8, @-r15
 	mov.l r9, @-r15
 	mov.l r10, @-r15
@@ -412,9 +412,9 @@ do_quad_write_odd:
 
 .align 4
 addr_get_all_banks_from32:
-	.long get_all_banks_from32
+	.long _get_all_banks_from32
 addr_get_all_banks_from64:
-	.long get_all_banks_from64
+	.long _get_all_banks_from64
 addr_double_testvals:
 	.long double_testvals
 

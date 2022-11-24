@@ -1191,7 +1191,7 @@ static int main_menu(void) {
         drawstring(fb, fonts[4], "*****************************************************", 0, 0);
         drawstring(fb, fonts[4], "*                                                   *", 1, 0);
         drawstring(fb, fonts[4], "*           Dreamcast PowerVR2 Memory Test          *", 2, 0);
-        drawstring(fb, fonts[4], "*                snickerbockers 2020                *", 3, 0);
+        drawstring(fb, fonts[4], "*             snickerbockers 2020, 2022             *", 3, 0);
         drawstring(fb, fonts[4], "*                                                   *", 4, 0);
         drawstring(fb, fonts[4], "*****************************************************", 5, 0);
 

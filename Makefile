@@ -9,10 +9,10 @@
 #
 ################################################################################
 
-AS=sh4-linux-gnu-as
-LD=sh4-linux-gnu-ld
-CC=sh4-linux-gnu-gcc
-OBJCOPY=sh4-linux-gnu-objcopy
+AS=sh4-elf-as
+LD=sh4-elf-ld
+CC=sh4-elf-gcc
+OBJCOPY=sh4-elf-objcopy
 
 all: pvr2_mem_test.bin
 

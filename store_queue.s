@@ -9,12 +9,12 @@
  * ----------------------------------------------------------------------------
  */
 
-.globl test_single_addr_sq
-.globl write_sq
+.globl _test_single_addr_sq
+.globl _write_sq
 
 .text
 	
-write_sq:
+_write_sq:
 	! r4 points to the data to write
 	! r5 is the destination address
 
