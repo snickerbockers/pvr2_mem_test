@@ -13,11 +13,14 @@ AS=sh4-elf-as
 LD=sh4-elf-ld
 CC=sh4-elf-gcc
 OBJCOPY=sh4-elf-objcopy
+SCRAMBLE=scramble
+MAKEIP=makeip
+CDI4DC=cdi4dc
 
-all: pvr2_mem_test.bin
+all: pvr2_mem_test.cdi
 
 clean:
-	rm -f init.o float_tests.o pvr2_mem_test.elf pvr2_mem_test.bin main.o store_queue.o
+	rm -rf init.o *.elf *.bin *.o *.iso *.cdi isodir
 
 init.o: init.s
 	$(AS) -little -o init.o init.s
@@ -34,11 +37,27 @@ store_queue.o: store_queue.s
 pvr2_mem_test.elf: init.o float_tests.o main.o store_queue.o dma_tests.o irq.o
 	$(CC) -Wl,-e_start,-Ttext,0x8c010000 init.o float_tests.o store_queue.o main.o dma_tests.o irq.o -o pvr2_mem_test.elf -nostartfiles -nostdlib -lgcc -m4
 
-pvr2_mem_test.bin: pvr2_mem_test.elf
-	$(OBJCOPY) -O binary -j .text -j .data -j .bss -j .rodata  --set-section-flags .bss=alloc,load,contents pvr2_mem_test.elf pvr2_mem_test.bin
+pvr2_mem_test.bin.unscrambled: pvr2_mem_test.elf
+	$(OBJCOPY) -O binary -j .text -j .data -j .bss -j .rodata  --set-section-flags .bss=alloc,load,contents pvr2_mem_test.elf $@
+
+isodir/1st_read.bin: pvr2_mem_test.bin.unscrambled
+	mkdir -p isodir
+	$(SCRAMBLE) $< $@
+
+filesystem.iso: isodir/1st_read.bin IP.BIN $(shell find isodir)
+	mkisofs -G IP.BIN -C 0,11702 -o $@ isodir
 
 main.o: main.c pvr2_mem_test.h
 	$(CC) -c main.c -nostartfiles -nostdlib
 
 dma_tests.o: dma_tests.c pvr2_mem_test.h
 	$(CC) -c dma_tests.c -nostartfiles -nostdlib
+
+IP.BIN: ip.txt IP.TMPL
+	$(MAKEIP) ./ip.txt ./IP.BIN
+
+pvr2_mem_test.cdi: filesystem.iso
+	$(CDI4DC) $< $@
+
+run: pvr2_mem_test.cdi
+	washingtondc -c test -- $<
