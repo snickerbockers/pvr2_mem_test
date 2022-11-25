@@ -58,3 +58,10 @@ The overflows happen every (1<<32) ticks.  So each overflow is worth
 (1 << 32) ticks, or 327.68 seconds.  Unsurprisingly, this test never
 overflows because 328 seconds would be a really insanely long time for DMA
 to complete.  lol.
+
+** expected results
+
+i've included screenshots of the results of all four tests running on
+a real Dreamcast in the screenshots/ subdirectory.  Note that the
+rightmost column in the DMA results pertains to timing, so it's not
+fair to expect an emulator to get that on perfectly right.
